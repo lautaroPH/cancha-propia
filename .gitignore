@@ -1,0 +1,19 @@
+# Node / Next.js
+node_modules/
+.next/
+out/
+apps/web/.env*.local
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Env files (never commit real secrets)
+.env
+apps/api/.env
+apps/web/.env.local
+
+# OS
+.DS_Store
+Thumbs.db

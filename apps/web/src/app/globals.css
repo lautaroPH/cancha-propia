@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+/*
+ * Theme tokens. `data-theme` is set by ThemeScript (inline, before paint) and
+ * ThemeToggle (client). No attribute = follow the OS preference.
+ */
+:root {
+  --background: #fafaf7;
+  --surface: #ffffff;
+  --surface-muted: #f1f2ed;
+  --foreground: #1b2320;
+  --muted-foreground: #5b6560;
+  --border: #e1e3dc;
+  --accent: #c4531e;
+  --accent-foreground: #ffffff;
+  --accent-soft: #f3e2d6;
+  --accent-strong: #9a3d14;
+  --verified: #2e7a56;
+  --verified-soft: #dceee3;
+  --danger: #b23b3b;
+  --danger-soft: #f4dede;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #131210;
+    --surface: #1c1a16;
+    --surface-muted: #221f1a;
+    --foreground: #edeae2;
+    --muted-foreground: #a8a399;
+    --border: #34312a;
+    --accent: #e37e3f;
+    --accent-foreground: #1a1200;
+    --accent-soft: #3a2718;
+    --accent-strong: #f0a874;
+    --verified: #6fcb9f;
+    --verified-soft: #17301f;
+    --danger: #e08080;
+    --danger-soft: #3a1f1f;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --background: #131210;
+  --surface: #1c1a16;
+  --surface-muted: #221f1a;
+  --foreground: #edeae2;
+  --muted-foreground: #a8a399;
+  --border: #34312a;
+  --accent: #e37e3f;
+  --accent-foreground: #1a1200;
+  --accent-soft: #3a2718;
+  --accent-strong: #f0a874;
+  --verified: #6fcb9f;
+  --verified-soft: #17301f;
+  --danger: #e08080;
+  --danger-soft: #3a1f1f;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-strong: var(--accent-strong);
+  --color-verified: var(--verified);
+  --color-verified-soft: var(--verified-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}

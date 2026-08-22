@@ -1,0 +1,139 @@
+import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { adminGetAthlete, adminAuditLog, ApiError } from "@/lib/api";
+import { AdminAccessDenied } from "@/components/admin-access-denied";
+import { ReviewActions } from "./review-actions";
+
+export default async function AdminAthleteDetailPage(props: PageProps<"/admin/athletes/[id]">) {
+  const { id } = await props.params;
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) redirect(`/login?next=/admin/athletes/${id}`);
+
+  let athlete;
+  try {
+    athlete = await adminGetAthlete(session.access_token, id);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) notFound();
+    if (err instanceof ApiError && err.status === 401) redirect(`/login?next=/admin/athletes/${id}`);
+    if (err instanceof ApiError && err.status === 403) return <AdminAccessDenied email={session.user.email!} />;
+    throw err;
+  }
+  const auditLog = await adminAuditLog(session.access_token, id);
+
+  return (
+    <div className="mx-auto max-w-3xl px-6 py-12">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">{athlete.full_name}</h1>
+          <p className="mt-1 text-muted-foreground">
+            {athlete.sport}
+            {athlete.discipline ? ` · ${athlete.discipline}` : ""} · {athlete.province ?? "—"}
+          </p>
+        </div>
+        <span className="inline-flex items-center rounded-full bg-surface-muted px-3 py-1 text-sm font-medium text-muted-foreground">
+          {athlete.status}
+        </span>
+      </div>
+
+      {athlete.is_minor && (
+        <p className="mt-4 rounded-lg bg-accent-soft px-3 py-2 text-sm text-accent-strong">
+          Atleta menor de edad — tutor: {athlete.guardian?.full_name} ({athlete.guardian?.relationship}),{" "}
+          {athlete.guardian?.email}
+        </p>
+      )}
+
+      <section className="mt-8 grid grid-cols-2 gap-4 text-sm">
+        <div>
+          <p className="text-muted-foreground">Fecha de nacimiento</p>
+          <p className="text-foreground">{athlete.date_of_birth}</p>
+        </div>
+        <div>
+          <p className="text-muted-foreground">Email de contacto</p>
+          <p className="text-foreground">{athlete.contact_email}</p>
+        </div>
+        <div>
+          <p className="text-muted-foreground">Club</p>
+          <p className="text-foreground">{athlete.club ?? "—"}</p>
+        </div>
+        <div>
+          <p className="text-muted-foreground">Federación</p>
+          <p className="text-foreground">
+            {athlete.federation ?? "—"}
+            {athlete.federation_license_number ? ` (Nº ${athlete.federation_license_number})` : ""}
+          </p>
+        </div>
+      </section>
+
+      {athlete.story && (
+        <section className="mt-6">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase">Historia</h2>
+          <p className="mt-1 whitespace-pre-line text-foreground/90">{athlete.story}</p>
+        </section>
+      )}
+
+      {athlete.evidence.length > 0 && (
+        <section className="mt-6">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase">Evidencia</h2>
+          <ul className="mt-2 space-y-1">
+            {athlete.evidence.map((e, i) => (
+              <li key={i} className="text-sm">
+                <span className="text-muted-foreground">[{e.kind}]</span>{" "}
+                {e.kind === "federation_link" ? (
+                  <a href={e.s3_key} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+                    {e.s3_key}
+                  </a>
+                ) : (
+                  <span className="text-foreground">{e.s3_key}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {athlete.admin_notes && (
+        <section className="mt-6">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase">Notas internas</h2>
+          <p className="mt-1 whitespace-pre-line text-sm text-foreground/90">{athlete.admin_notes}</p>
+        </section>
+      )}
+
+      {athlete.campaigns.length > 0 && (
+        <section className="mt-6">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase">Campañas</h2>
+          <ul className="mt-2 space-y-2">
+            {athlete.campaigns.map((c, i) => (
+              <li key={i} className="rounded-lg border border-border p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-foreground">{c.title}</span>
+                  <span className="text-xs text-muted-foreground">{c.status}</span>
+                </div>
+                <p className="text-muted-foreground">Meta: ${c.goal_amount_ars.toLocaleString("es-AR")}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <ReviewActions athleteId={athlete.id} accessToken={session.access_token} status={athlete.status} />
+
+      {auditLog.length > 0 && (
+        <section className="mt-10 border-t border-border pt-6">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase">Historial</h2>
+          <ul className="mt-2 space-y-1.5 text-sm">
+            {auditLog.map((entry, i) => (
+              <li key={i} className="text-muted-foreground">
+                <span className="font-mono text-xs">{new Date(entry.created_at).toLocaleString("es-AR")}</span>{" "}
+                — <span className="text-foreground">{entry.action}</span> por {entry.admin_email}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}
