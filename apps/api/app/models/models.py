@@ -8,7 +8,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.db import Base
 
 AthleteStatus = ENUM("pending", "active", "rejected", "suspended", name="athlete_status", create_type=False)
-CampaignStatus = ENUM("draft", "active", "grace", "closed", "expired", name="campaign_status", create_type=False)
+CampaignStatus = ENUM(
+    "draft", "active", "grace", "closed", "expired", "paused", name="campaign_status", create_type=False
+)
 EvidenceKind = ENUM(
     "id_document", "federation_link", "competition_result", "ranking", "photo", "other",
     name="evidence_kind", create_type=False,

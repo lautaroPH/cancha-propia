@@ -14,6 +14,7 @@ from app.schemas.schemas import (
     AthleteAdminDetail,
     AuditLogEntryOut,
     CampaignOut,
+    CampaignPauseRequest,
     EvidenceFileOut,
     RejectRequest,
     RequestInfoRequest,
@@ -25,6 +26,13 @@ from app.services.s3 import public_url
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(get_current_admin)])
 
 RE_VERIFICATION_INTERVAL_DAYS = 365
+
+
+@router.get("/whoami")
+async def admin_whoami(admin: AdminUser = Depends(get_current_admin)):
+    # Cheap probe the frontend uses to decide whether to show admin nav at
+    # all — the router-level dependency already 403s a non-admin caller.
+    return {"email": admin.email}
 
 
 async def _load_athlete_or_404(db: AsyncSession, athlete_id) -> Athlete:
@@ -237,6 +245,52 @@ async def approve_campaign(
 
     campaign.status = "active"
     await _log(db, admin, campaign.athlete_id, "approve_campaign", {"campaign_id": str(campaign.id)})
+    await db.commit()
+    await db.refresh(campaign)
+    return campaign
+
+
+async def _load_campaign_or_404(db: AsyncSession, campaign_id) -> Campaign:
+    stmt = select(Campaign).where(Campaign.id == campaign_id).options(selectinload(Campaign.breakdown_items))
+    campaign = (await db.execute(stmt)).scalar_one_or_none()
+    if campaign is None:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return campaign
+
+
+@router.post("/campaigns/{campaign_id}/pause", response_model=CampaignOut)
+async def pause_campaign(
+    campaign_id,
+    payload: CampaignPauseRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    campaign = await _load_campaign_or_404(db, campaign_id)
+    if campaign.status not in ("active", "grace"):
+        raise HTTPException(status_code=409, detail="Only an active or grace campaign can be paused")
+
+    campaign.status = "paused"
+    await _log(
+        db, admin, campaign.athlete_id, "pause_campaign",
+        {"campaign_id": str(campaign.id), "reason": payload.reason},
+    )
+    await db.commit()
+    await db.refresh(campaign)
+    return campaign
+
+
+@router.post("/campaigns/{campaign_id}/resume", response_model=CampaignOut)
+async def resume_campaign(
+    campaign_id,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    campaign = await _load_campaign_or_404(db, campaign_id)
+    if campaign.status != "paused":
+        raise HTTPException(status_code=409, detail="Only a paused campaign can be resumed")
+
+    campaign.status = "active"
+    await _log(db, admin, campaign.athlete_id, "resume_campaign", {"campaign_id": str(campaign.id)})
     await db.commit()
     await db.refresh(campaign)
     return campaign

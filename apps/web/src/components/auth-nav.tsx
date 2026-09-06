@@ -4,19 +4,55 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { getMe, adminWhoAmI, ApiError } from "@/lib/api";
+
+type Session = { email: string; token: string } | null;
 
 export function AuthNav() {
   const router = useRouter();
-  const [email, setEmail] = useState<string | null | undefined>(undefined);
+  const [session, setSession] = useState<Session | undefined>(undefined);
+  // undefined = still checking, null = no profile / not an admin
+  const [displayName, setDisplayName] = useState<string | null | undefined>(undefined);
+  const [hasApplication, setHasApplication] = useState<boolean | undefined>(undefined);
+  const [isAdmin, setIsAdmin] = useState<boolean | undefined>(undefined);
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? null));
+
+    function onSession(s: { access_token: string; user: { email?: string | null } } | null) {
+      setSession(s ? { email: s.user.email ?? "", token: s.access_token } : null);
+    }
+
+    supabase.auth.getSession().then(({ data }) => onSession(data.session));
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => setEmail(session?.user.email ?? null));
+    } = supabase.auth.onAuthStateChange((_event, s) => onSession(s));
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!session) {
+      setDisplayName(session === null ? null : undefined);
+      setHasApplication(session === null ? false : undefined);
+      setIsAdmin(session === null ? false : undefined);
+      return;
+    }
+
+    getMe(session.token)
+      .then((athlete) => {
+        setHasApplication(true);
+        setDisplayName(athlete.full_name.split(" ")[0]);
+      })
+      .catch((err) => {
+        // 403 = no athlete profile linked to this account yet.
+        setHasApplication(err instanceof ApiError && err.status === 403 ? false : true);
+        setDisplayName(session.email.split("@")[0]);
+      });
+
+    adminWhoAmI(session.token)
+      .then(() => setIsAdmin(true))
+      .catch(() => setIsAdmin(false));
+  }, [session]);
 
   async function signOut() {
     const supabase = createClient();
@@ -25,24 +61,42 @@ export function AuthNav() {
     router.refresh();
   }
 
-  if (email === undefined) return <div className="h-8 w-16" />;
+  if (session === undefined) return <div className="h-8 w-16" />;
 
-  if (email === null) {
+  if (session === null) {
     return (
-      <Link href="/login" className="text-sm font-medium text-foreground hover:text-accent">
-        Ingresar
-      </Link>
+      <div className="flex items-center gap-4 text-sm">
+        <Link
+          href="/apply"
+          className="rounded-lg bg-accent px-3.5 py-1.5 font-medium text-accent-foreground hover:opacity-90"
+        >
+          Postularme
+        </Link>
+        <Link href="/login" className="font-medium text-foreground hover:text-accent">
+          Ingresar
+        </Link>
+      </div>
     );
   }
 
   return (
     <div className="flex items-center gap-3 text-sm">
+      {hasApplication === false && (
+        <Link
+          href="/apply"
+          className="rounded-lg bg-accent px-3.5 py-1.5 font-medium text-accent-foreground hover:opacity-90"
+        >
+          Postularme
+        </Link>
+      )}
       <Link href="/dashboard" className="font-medium text-foreground hover:text-accent">
-        Mi cuenta
+        {displayName ?? "Mi cuenta"}
       </Link>
-      <Link href="/admin" className="font-medium text-foreground hover:text-accent">
-        Admin
-      </Link>
+      {isAdmin && (
+        <Link href="/admin" className="font-medium text-foreground hover:text-accent">
+          Admin
+        </Link>
+      )}
       <button onClick={signOut} className="text-muted-foreground hover:text-danger">
         Salir
       </button>

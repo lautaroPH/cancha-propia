@@ -32,6 +32,7 @@ export default async function DashboardPage() {
 
   const activeCampaign = athlete.campaigns.find((c) => c.status === "active" || c.status === "grace");
   const draftCampaigns = athlete.campaigns.filter((c) => c.status === "draft");
+  const pausedCampaign = athlete.campaigns.find((c) => c.status === "paused");
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-12">
@@ -89,6 +90,7 @@ export default async function DashboardPage() {
             accessToken={session.access_token}
             activeCampaign={activeCampaign}
             draftCampaigns={draftCampaigns}
+            pausedCampaign={pausedCampaign}
           />
         </>
       )}

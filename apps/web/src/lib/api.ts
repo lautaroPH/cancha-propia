@@ -32,11 +32,13 @@ export type Campaign = {
   title: string;
   description: string | null;
   event_date: string | null;
-  status: "draft" | "active" | "grace" | "closed" | "expired";
+  status: "draft" | "active" | "grace" | "closed" | "expired" | "paused";
   goal_amount_ars: number;
   raised_amount_ars: number | null;
   breakdown_items: CampaignBreakdownItem[];
 };
+
+export type Achievement = { title: string; date?: string; description?: string };
 
 export type AthleteProfile = {
   slug: string;
@@ -51,7 +53,7 @@ export type AthleteProfile = {
   federation: string | null;
   bio: string | null;
   story: string | null;
-  achievements: { title: string; year?: number; description?: string }[];
+  achievements: Achievement[];
   identity_verified: boolean;
   career_verified: boolean;
   competition_verified: boolean;
@@ -121,6 +123,7 @@ export type AthleteDetail = AthleteProfile & {
   instagram_public: boolean;
   whatsapp_public: boolean;
   alias_public: boolean;
+  evidence: EvidenceFileEntry[];
 };
 
 export type AthleteAdminDetail = AthleteDetail & {
@@ -137,7 +140,7 @@ export type AuditLogEntry = {
 export type AthleteSelfUpdatePayload = Partial<{
   bio: string;
   story: string;
-  achievements: { title: string; year?: number; description?: string }[];
+  achievements: Achievement[];
   photo_s3_key: string;
   instagram_handle: string;
   instagram_public: boolean;
@@ -207,6 +210,10 @@ export function devIssueOtp(email: string) {
 
 // --- Admin ---
 
+export function adminWhoAmI(token: string) {
+  return authedFetch<{ email: string }>(token, "/admin/whoami");
+}
+
 export function adminListApplications(token: string) {
   return authedFetch<AdminAthleteListItem[]>(token, "/admin/applications");
 }
@@ -258,6 +265,17 @@ export function adminReactivate(token: string, id: string) {
 
 export function adminApproveCampaign(token: string, campaignId: string) {
   return authedFetch<Campaign>(token, `/admin/campaigns/${campaignId}/approve`, { method: "POST" });
+}
+
+export function adminPauseCampaign(token: string, campaignId: string, reason?: string) {
+  return authedFetch<Campaign>(token, `/admin/campaigns/${campaignId}/pause`, {
+    method: "POST",
+    body: JSON.stringify({ reason: reason || undefined }),
+  });
+}
+
+export function adminResumeCampaign(token: string, campaignId: string) {
+  return authedFetch<Campaign>(token, `/admin/campaigns/${campaignId}/resume`, { method: "POST" });
 }
 
 export function adminAuditLog(token: string, athleteId: string) {

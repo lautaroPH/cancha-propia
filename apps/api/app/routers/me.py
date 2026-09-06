@@ -5,13 +5,14 @@ from sqlalchemy.orm import selectinload
 
 from app.core.auth import get_current_athlete
 from app.core.db import get_db
-from app.models.models import Athlete, Campaign, CampaignBreakdownItem
+from app.models.models import Athlete, Campaign, CampaignBreakdownItem, EvidenceFile
 from app.schemas.schemas import (
     AthleteSelfUpdate,
     AthleteSelfView,
     CampaignCreate,
     CampaignOut,
     CampaignRaisedUpdate,
+    EvidenceFileOut,
 )
 from app.services.reapplication import reapply_available_at
 from app.services.s3 import public_url
@@ -19,7 +20,7 @@ from app.services.s3 import public_url
 router = APIRouter(prefix="/me", tags=["me"])
 
 
-def _self_view(athlete: Athlete) -> AthleteSelfView:
+def _self_view(athlete: Athlete, evidence: list[EvidenceFile]) -> AthleteSelfView:
     return AthleteSelfView(
         id=athlete.id,
         slug=athlete.slug,
@@ -59,6 +60,7 @@ def _self_view(athlete: Athlete) -> AthleteSelfView:
         admin_notes=None,
         created_at=athlete.created_at,
         campaigns=[CampaignOut.model_validate(c) for c in athlete.campaigns],
+        evidence=[EvidenceFileOut.model_validate(e) for e in evidence],
     )
 
 
@@ -71,13 +73,20 @@ async def _reload_with_campaigns(db: AsyncSession, athlete_id) -> Athlete:
     return (await db.execute(stmt)).scalar_one()
 
 
+async def _load_evidence(db: AsyncSession, athlete_id) -> list[EvidenceFile]:
+    return (
+        await db.execute(select(EvidenceFile).where(EvidenceFile.athlete_id == athlete_id))
+    ).scalars().all()
+
+
 @router.get("", response_model=AthleteSelfView)
 async def get_my_profile(
     athlete: Athlete = Depends(get_current_athlete),
     db: AsyncSession = Depends(get_db),
 ):
     athlete = await _reload_with_campaigns(db, athlete.id)
-    return _self_view(athlete)
+    evidence = await _load_evidence(db, athlete.id)
+    return _self_view(athlete, evidence)
 
 
 @router.patch("", response_model=AthleteSelfView)
@@ -86,12 +95,15 @@ async def update_my_profile(
     athlete: Athlete = Depends(get_current_athlete),
     db: AsyncSession = Depends(get_db),
 ):
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    # mode="json" so achievement dates serialize to strings before landing in
+    # the JSONB column, instead of raw `date` objects the driver can't encode.
+    for field, value in payload.model_dump(exclude_unset=True, mode="json").items():
         setattr(athlete, field, value)
 
     await db.commit()
     athlete = await _reload_with_campaigns(db, athlete.id)
-    return _self_view(athlete)
+    evidence = await _load_evidence(db, athlete.id)
+    return _self_view(athlete, evidence)
 
 
 @router.post("/campaigns", response_model=CampaignOut, status_code=201)

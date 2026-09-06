@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { updateMe, type AthleteDetail } from "@/lib/api";
-
-type Achievement = { title: string; year?: number; description?: string };
+import { updateMe, type AthleteDetail, type Achievement } from "@/lib/api";
 
 export function ProfileEditor({ athlete, accessToken }: { athlete: AthleteDetail; accessToken: string }) {
   const router = useRouter();
@@ -25,11 +23,36 @@ export function ProfileEditor({ athlete, accessToken }: { athlete: AthleteDetail
   async function save() {
     setStatus("saving");
     setError("");
+
+    // A "público" toggle with nothing behind it just shows blank on the
+    // profile — the API rejects this too, but catch it here for a clearer message.
+    if (instagramPublic && !instagramHandle.trim()) {
+      setStatus("error");
+      setError("Completá tu usuario de Instagram antes de hacerlo público.");
+      return;
+    }
+    if (whatsappPublic && !whatsappNumber.trim()) {
+      setStatus("error");
+      setError("Completá tu número de WhatsApp antes de hacerlo público.");
+      return;
+    }
+    if (aliasPublic && !alias.trim()) {
+      setStatus("error");
+      setError("Completá tu alias antes de mostrarlo en tu perfil público.");
+      return;
+    }
+
+    // Blank rows (added but never filled in) get dropped rather than saved —
+    // a title is the minimum for a logro to mean anything on the profile.
+    const cleanAchievements = achievements
+      .filter((a) => a.title.trim())
+      .map((a) => ({ ...a, title: a.title.trim() }));
+
     try {
       await updateMe(accessToken, {
         bio,
         story,
-        achievements,
+        achievements: cleanAchievements,
         instagram_handle: instagramHandle || undefined,
         instagram_public: instagramPublic,
         whatsapp_number: whatsappNumber || undefined,
@@ -38,6 +61,7 @@ export function ProfileEditor({ athlete, accessToken }: { athlete: AthleteDetail
         cbu: cbu || undefined,
         alias_public: aliasPublic,
       });
+      setAchievements(cleanAchievements);
       setStatus("saved");
       router.refresh();
     } catch (err) {
@@ -76,28 +100,36 @@ export function ProfileEditor({ athlete, accessToken }: { athlete: AthleteDetail
 
       <div>
         <span className="text-sm font-medium text-foreground/90">Logros</span>
-        <div className="mt-2 space-y-2">
+        <div className="mt-2 space-y-3">
           {achievements.map((a, i) => (
-            <div key={i} className="flex gap-2">
+            <div key={i} className="space-y-1.5 rounded-lg border border-border p-2.5">
+              <div className="flex gap-2">
+                <input
+                  placeholder="Título (obligatorio)"
+                  value={a.title}
+                  onChange={(e) => updateAchievement(i, { title: e.target.value })}
+                  className="flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+                />
+                <input
+                  type="date"
+                  value={a.date ?? ""}
+                  onChange={(e) => updateAchievement(i, { date: e.target.value || undefined })}
+                  className="w-40 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setAchievements((prev) => prev.filter((_, idx) => idx !== i))}
+                  className="px-2 text-sm text-muted-foreground hover:text-danger"
+                >
+                  Quitar
+                </button>
+              </div>
               <input
-                placeholder="Año"
-                value={a.year ?? ""}
-                onChange={(e) => updateAchievement(i, { year: Number(e.target.value) || undefined })}
-                className="w-20 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+                placeholder="Descripción (opcional)"
+                value={a.description ?? ""}
+                onChange={(e) => updateAchievement(i, { description: e.target.value || undefined })}
+                className="w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
               />
-              <input
-                placeholder="Título"
-                value={a.title}
-                onChange={(e) => updateAchievement(i, { title: e.target.value })}
-                className="flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => setAchievements((prev) => prev.filter((_, idx) => idx !== i))}
-                className="px-2 text-sm text-muted-foreground hover:text-danger"
-              >
-                Quitar
-              </button>
             </div>
           ))}
           <button
@@ -107,6 +139,9 @@ export function ProfileEditor({ athlete, accessToken }: { athlete: AthleteDetail
           >
             + Agregar logro
           </button>
+          <p className="text-xs text-muted-foreground">
+            Los logros sin título no se guardan.
+          </p>
         </div>
       </div>
 

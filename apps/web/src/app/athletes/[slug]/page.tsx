@@ -110,8 +110,10 @@ export default async function AthleteProfilePage(props: PageProps<"/athletes/[sl
           <ul className="mt-3 space-y-2">
             {athlete.achievements.map((a, i) => (
               <li key={i} className="flex gap-3 text-foreground/90">
-                {a.year && (
-                  <span className="w-12 shrink-0 font-mono text-sm text-muted-foreground">{a.year}</span>
+                {a.date && (
+                  <span className="w-24 shrink-0 font-mono text-sm text-muted-foreground">
+                    {new Date(a.date).toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" })}
+                  </span>
                 )}
                 <span>
                   <span className="font-medium">{a.title}</span>
@@ -157,45 +159,47 @@ export default async function AthleteProfilePage(props: PageProps<"/athletes/[sl
         </section>
       )}
 
-      <section className="mt-10">
-        <h2 className="text-lg font-semibold text-foreground">¿Cómo podés ayudar?</h2>
-        <div className="mt-3 space-y-3">
-          {athlete.alias && (
-            <div className="rounded-lg border border-border bg-surface p-4">
-              <p className="text-sm text-muted-foreground">Transferí directo a su alias</p>
-              <p className="mt-1 font-mono text-lg font-semibold text-foreground">{athlete.alias}</p>
-              {athlete.cbu && (
-                <p className="mt-0.5 font-mono text-xs text-muted-foreground">CBU: {athlete.cbu}</p>
+      {(athlete.alias || athlete.instagram_handle || athlete.whatsapp_number) && (
+        <section className="mt-10">
+          <h2 className="text-lg font-semibold text-foreground">¿Cómo podés ayudar?</h2>
+          <div className="mt-3 space-y-3">
+            {athlete.alias && (
+              <div className="rounded-lg border border-border bg-surface p-4">
+                <p className="text-sm text-muted-foreground">Transferí directo a su alias</p>
+                <p className="mt-1 font-mono text-lg font-semibold text-foreground">{athlete.alias}</p>
+                {athlete.cbu && (
+                  <p className="mt-0.5 font-mono text-xs text-muted-foreground">CBU: {athlete.cbu}</p>
+                )}
+                <p className="mt-2 text-xs text-muted-foreground">
+                  La plataforma no procesa ni retiene este dinero — la transferencia va directo al atleta.
+                </p>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-3">
+              {athlete.instagram_handle && (
+                <a
+                  href={`https://instagram.com/${athlete.instagram_handle}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:border-accent"
+                >
+                  Instagram
+                </a>
               )}
-              <p className="mt-2 text-xs text-muted-foreground">
-                La plataforma no procesa ni retiene este dinero — la transferencia va directo al atleta.
-              </p>
+              {athlete.whatsapp_number && (
+                <a
+                  href={`https://wa.me/${athlete.whatsapp_number.replace(/[^\d]/g, "")}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:border-accent"
+                >
+                  WhatsApp
+                </a>
+              )}
             </div>
-          )}
-          <div className="flex flex-wrap gap-3">
-            {athlete.instagram_handle && (
-              <a
-                href={`https://instagram.com/${athlete.instagram_handle}`}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:border-accent"
-              >
-                Instagram
-              </a>
-            )}
-            {athlete.whatsapp_number && (
-              <a
-                href={`https://wa.me/${athlete.whatsapp_number.replace(/[^\d]/g, "")}`}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:border-accent"
-              >
-                WhatsApp
-              </a>
-            )}
           </div>
-        </div>
-      </section>
+        </section>
+      )}
     </div>
   );
 }

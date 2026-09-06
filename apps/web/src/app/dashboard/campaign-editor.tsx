@@ -18,10 +18,12 @@ export function CampaignEditor({
   accessToken,
   activeCampaign,
   draftCampaigns,
+  pausedCampaign,
 }: {
   accessToken: string;
   activeCampaign?: Campaign;
   draftCampaigns: Campaign[];
+  pausedCampaign?: Campaign;
 }) {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -63,6 +65,11 @@ export function CampaignEditor({
           >
             Cerrar campaña
           </button>
+        </div>
+      ) : pausedCampaign ? (
+        <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">{pausedCampaign.title}</p>
+          <p className="mt-1">Un administrador pausó esta campaña temporalmente. Contactanos si tenés dudas.</p>
         </div>
       ) : draftCampaigns.length > 0 ? (
         <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">

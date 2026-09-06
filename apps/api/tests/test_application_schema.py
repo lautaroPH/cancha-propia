@@ -13,6 +13,7 @@ def _base_payload(**overrides):
         date_of_birth=date(2000, 1, 1),
         national_id="30111222",
         sport="Judo",
+        evidence_links=["https://example.com/ranking"],
     )
     payload.update(overrides)
     return payload
@@ -49,6 +50,16 @@ def test_minor_application_with_email_and_consent_is_valid():
     )
     assert str(app.guardian_email) == "ana@example.com"
     assert app.guardian_consent is True
+
+
+def test_application_requires_at_least_one_evidence_link():
+    with pytest.raises(ValidationError, match="evidence link is required"):
+        ApplicationCreate(**_base_payload(date_of_birth=_years_ago(20), evidence_links=[]))
+
+
+def test_application_rejects_blank_only_evidence_links():
+    with pytest.raises(ValidationError, match="evidence link is required"):
+        ApplicationCreate(**_base_payload(date_of_birth=_years_ago(20), evidence_links=["   "]))
 
 
 def test_national_id_hash_is_stable_and_ignores_formatting():

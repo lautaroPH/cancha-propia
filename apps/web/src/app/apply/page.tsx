@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { submitApplication, getMe, ApiError } from "@/lib/api";
+import { submitApplication, getMe, ApiError, type AthleteDetail } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
 import { PROVINCES, SPORTS } from "@/lib/constants";
 
@@ -24,6 +24,9 @@ export default function ApplyPage() {
   const [sessionEmail, setSessionEmail] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [reapplyAvailableAt, setReapplyAvailableAt] = useState<string | null>(null);
+  // Rejected applicant's previous submission — used to prefill the form so
+  // resubmitting doesn't mean retyping everything from scratch.
+  const [previous, setPrevious] = useState<AthleteDetail | null>(null);
   const minor = useMemo(() => isMinor(dateOfBirth), [dateOfBirth]);
 
   // Applying requires being logged in — that's what lets us link the
@@ -45,6 +48,8 @@ export default function ApplyPage() {
         const athlete = await getMe(session.access_token);
         if (athlete.status === "rejected") {
           setReapplyAvailableAt(athlete.reapply_available_at);
+          setPrevious(athlete);
+          setDateOfBirth(athlete.date_of_birth);
           setStatus("idle");
         } else {
           // pending/active/suspended — already has a live application.
@@ -148,26 +153,44 @@ export default function ApplyPage() {
       )}
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-        <Field label="Nombre completo" name="full_name" placeholder="Martina López" required />
+        <Field
+          label="Nombre completo"
+          name="full_name"
+          placeholder="Martina López"
+          defaultValue={previous?.full_name}
+          required
+        />
         <div className="grid grid-cols-2 gap-4">
           <Field
             label="Fecha de nacimiento"
             name="date_of_birth"
             type="date"
+            defaultValue={previous?.date_of_birth}
             required
             onChange={(e) => setDateOfBirth(e.target.value)}
           />
           <Field label="DNI" name="national_id" placeholder="30111222" required />
         </div>
+        {previous && (
+          <p className="-mt-3 text-xs text-muted-foreground">
+            Por seguridad no guardamos tu DNI en texto plano — volvé a escribirlo.
+          </p>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Deporte" name="sport" placeholder="Judo" list={SPORTS} required />
-          <Field label="Categoría" name="category" placeholder="Juvenil, Sub-20, Senior..." />
+          <Field label="Deporte" name="sport" placeholder="Judo" list={SPORTS} defaultValue={previous?.sport} required />
+          <Field
+            label="Categoría"
+            name="category"
+            placeholder="Juvenil, Sub-20, Senior..."
+            defaultValue={previous?.category ?? undefined}
+          />
         </div>
         <Field
           label="Disciplina / prueba / categoría de peso"
           name="discipline"
           placeholder="-63kg, estilos libres 100m, maratón..."
+          defaultValue={previous?.discipline ?? undefined}
         />
         <p className="-mt-3 text-xs text-muted-foreground">
           La categoría es tu franja competitiva (edad o nivel); la disciplina es la prueba, estilo o
@@ -175,12 +198,28 @@ export default function ApplyPage() {
         </p>
 
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Provincia" name="province" placeholder="Buenos Aires" list={PROVINCES} />
-          <Field label="Ciudad" name="city" placeholder="Mar del Plata" />
+          <Field
+            label="Provincia"
+            name="province"
+            placeholder="Buenos Aires"
+            list={PROVINCES}
+            defaultValue={previous?.province ?? undefined}
+          />
+          <Field label="Ciudad" name="city" placeholder="Mar del Plata" defaultValue={previous?.city ?? undefined} />
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Club" name="club" placeholder="Club Atlético River Plate" />
-          <Field label="Federación" name="federation" placeholder="Federación Argentina de Judo" />
+          <Field
+            label="Club"
+            name="club"
+            placeholder="Club Atlético River Plate"
+            defaultValue={previous?.club ?? undefined}
+          />
+          <Field
+            label="Federación"
+            name="federation"
+            placeholder="Federación Argentina de Judo"
+            defaultValue={previous?.federation ?? undefined}
+          />
         </div>
 
         <TextArea
@@ -188,22 +227,29 @@ export default function ApplyPage() {
           name="bio"
           rows={2}
           placeholder="Una o dos frases sobre quién sos como atleta."
+          defaultValue={previous?.bio ?? undefined}
         />
         <TextArea
           label="Tu historia deportiva"
           name="story"
           rows={4}
           placeholder="Cómo empezaste, tu trayectoria, y por qué necesitás apoyo ahora."
+          defaultValue={previous?.story ?? undefined}
         />
         <TextArea
           label="Enlaces de evidencia (uno por línea)"
           name="evidence_links"
           rows={3}
           placeholder="Página de tu federación, ranking oficial, resultados de competencias, tu Instagram u otra red social donde se vea tu carrera deportiva..."
+          defaultValue={previous?.evidence
+            .filter((e) => e.kind === "federation_link")
+            .map((e) => e.s3_key)
+            .join("\n")}
+          required
         />
         <p className="-mt-3 text-xs text-muted-foreground">
-          Tu Instagram u otra red social también sirve como evidencia — ayuda a confirmar que sos
-          quien decís ser y a ver tu trayectoria real.
+          Necesitamos al menos un enlace para poder verificar tu identidad y trayectoria — tu
+          Instagram u otra red social también sirve como evidencia.
         </p>
 
         {minor && (
@@ -217,6 +263,7 @@ export default function ApplyPage() {
               name="guardian_email"
               type="email"
               placeholder="ana@example.com"
+              defaultValue={previous?.guardian_email ?? undefined}
               required={minor}
             />
             <label className="flex items-start gap-2 text-sm text-foreground/90">
@@ -251,7 +298,7 @@ function Field({
   name,
   type = "text",
   required,
-  value,
+  defaultValue,
   placeholder,
   list,
   onChange,
@@ -260,7 +307,7 @@ function Field({
   name: string;
   type?: string;
   required?: boolean;
-  value?: string;
+  defaultValue?: string;
   placeholder?: string;
   list?: string[];
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -273,7 +320,7 @@ function Field({
         name={name}
         type={type}
         required={required}
-        value={value}
+        defaultValue={defaultValue}
         placeholder={placeholder}
         list={listId}
         onChange={onChange}
@@ -295,11 +342,15 @@ function TextArea({
   name,
   rows,
   placeholder,
+  defaultValue,
+  required,
 }: {
   label: string;
   name: string;
   rows: number;
   placeholder?: string;
+  defaultValue?: string;
+  required?: boolean;
 }) {
   return (
     <label className="block">
@@ -308,6 +359,8 @@ function TextArea({
         name={name}
         rows={rows}
         placeholder={placeholder}
+        defaultValue={defaultValue}
+        required={required}
         className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
       />
     </label>

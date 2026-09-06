@@ -38,12 +38,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               Cancha Propia
             </Link>
             <div className="flex items-center gap-4">
-              <Link
-                href="/apply"
-                className="rounded-lg bg-accent px-3.5 py-1.5 text-sm font-medium text-accent-foreground hover:opacity-90"
-              >
-                Postularme
-              </Link>
               <AuthNav />
               <ThemeToggle />
             </div>

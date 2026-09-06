@@ -1,5 +1,7 @@
 import uuid
-from datetime import date, datetime
+from datetime import date
+from datetime import date as _date  # avoids self-shadowing on the `date` field below
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
@@ -41,6 +43,16 @@ class ApplicationCreate(BaseModel):
                 raise ValueError("guardian_email is required for applicants under 18")
             if not self.guardian_consent:
                 raise ValueError("guardian consent is required for applicants under 18")
+        return self
+
+    @model_validator(mode="after")
+    def evidence_required(self) -> "ApplicationCreate":
+        # Without at least one link there's nothing for an admin to verify
+        # identity/career against — an empty application can't be reviewed.
+        if not any(link.strip() for link in self.evidence_links):
+            raise ValueError(
+                "At least one evidence link is required (federation page, ranking, results, social media, etc.)"
+            )
         return self
 
 
@@ -185,11 +197,13 @@ class AthleteAdminDetail(AthleteAdminView):
 
 class AthleteSelfView(AthleteAdminView):
     """What an athlete/guardian sees about their own profile — same as admin
-    minus admin-only commentary (admin_notes)."""
+    minus admin-only commentary (admin_notes). Includes their own evidence so
+    a rejected applicant can see what they submitted when resubmitting."""
 
     instagram_public: bool
     whatsapp_public: bool
     alias_public: bool
+    evidence: list[EvidenceFileOut]
 
     model_config = {"from_attributes": False}
 
@@ -213,12 +227,20 @@ class RequestInfoRequest(BaseModel):
     message: str = Field(min_length=1)
 
 
+class AchievementIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1)
+    date: _date | None = None
+    description: str | None = None
+
+
 class AthleteSelfUpdate(BaseModel):
     """Free-edit fields only — see plan §2 for what requires re-review instead."""
 
     bio: str | None = None
     story: str | None = None
-    achievements: list[dict] | None = None
+    achievements: list[AchievementIn] | None = None
     photo_s3_key: str | None = None
     instagram_handle: str | None = None
     instagram_public: bool | None = None
@@ -227,6 +249,18 @@ class AthleteSelfUpdate(BaseModel):
     alias: str | None = None
     cbu: str | None = None
     alias_public: bool | None = None
+
+    @model_validator(mode="after")
+    def public_toggles_need_a_value(self) -> "AthleteSelfUpdate":
+        # A "public" toggle with nothing behind it just shows an empty field
+        # on the profile — require the value alongside the toggle.
+        if self.instagram_public and not self.instagram_handle:
+            raise ValueError("instagram_handle is required to make Instagram public")
+        if self.whatsapp_public and not self.whatsapp_number:
+            raise ValueError("whatsapp_number is required to make WhatsApp public")
+        if self.alias_public and not self.alias:
+            raise ValueError("alias is required to make payment info public")
+        return self
 
 
 class CampaignBreakdownItemIn(BaseModel):
@@ -244,3 +278,7 @@ class CampaignCreate(BaseModel):
 
 class CampaignRaisedUpdate(BaseModel):
     raised_amount_ars: int
+
+
+class CampaignPauseRequest(BaseModel):
+    reason: str | None = None

@@ -32,8 +32,8 @@ SAMPLE_ATHLETES = [
             "fondos para cubrir el viaje, alojamiento e inscripción."
         ),
         "achievements": [
-            {"title": "Campeona Nacional Juvenil", "year": 2019, "description": "Categoría -63kg"},
-            {"title": "3er puesto Sudamericano", "year": 2023, "description": "Asunción, Paraguay"},
+            {"title": "Campeona Nacional Juvenil", "date": "2019-11-03", "description": "Categoría -63kg"},
+            {"title": "3er puesto Sudamericano", "date": "2023-06-18", "description": "Asunción, Paraguay"},
         ],
         "identity_verified": True,
         "career_verified": True,
