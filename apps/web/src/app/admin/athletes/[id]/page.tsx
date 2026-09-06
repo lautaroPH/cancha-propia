@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { adminGetAthlete, adminAuditLog, ApiError } from "@/lib/api";
 import { AdminAccessDenied } from "@/components/admin-access-denied";
+import { CampaignApprovals } from "./campaign-approvals";
 import { ReviewActions } from "./review-actions";
 
 export default async function AdminAthleteDetailPage(props: PageProps<"/admin/athletes/[id]">) {
@@ -41,8 +42,10 @@ export default async function AdminAthleteDetailPage(props: PageProps<"/admin/at
 
       {athlete.is_minor && (
         <p className="mt-4 rounded-lg bg-accent-soft px-3 py-2 text-sm text-accent-strong">
-          Atleta menor de edad — tutor: {athlete.guardian?.full_name} ({athlete.guardian?.relationship}),{" "}
-          {athlete.guardian?.email}
+          Atleta menor de edad — consentimiento de {athlete.guardian_email ?? "—"}
+          {athlete.guardian_consent_at
+            ? ` el ${new Date(athlete.guardian_consent_at).toLocaleString("es-AR")}`
+            : " (sin confirmar)"}
         </p>
       )}
 
@@ -105,17 +108,7 @@ export default async function AdminAthleteDetailPage(props: PageProps<"/admin/at
       {athlete.campaigns.length > 0 && (
         <section className="mt-6">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase">Campañas</h2>
-          <ul className="mt-2 space-y-2">
-            {athlete.campaigns.map((c, i) => (
-              <li key={i} className="rounded-lg border border-border p-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-foreground">{c.title}</span>
-                  <span className="text-xs text-muted-foreground">{c.status}</span>
-                </div>
-                <p className="text-muted-foreground">Meta: ${c.goal_amount_ars.toLocaleString("es-AR")}</p>
-              </li>
-            ))}
-          </ul>
+          <CampaignApprovals campaigns={athlete.campaigns} accessToken={session.access_token} />
         </section>
       )}
 

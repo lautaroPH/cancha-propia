@@ -16,17 +16,6 @@ EvidenceKind = ENUM(
 ReportStatus = ENUM("open", "resolved", name="report_status", create_type=False)
 
 
-class Guardian(Base):
-    __tablename__ = "guardian"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    full_name: Mapped[str] = mapped_column(Text)
-    relationship_: Mapped[str] = mapped_column("relationship", Text)
-    email: Mapped[str] = mapped_column(Text)
-    phone: Mapped[str | None] = mapped_column(Text, nullable=True)
-    id_document_s3_key: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
 
 class AdminUser(Base):
     __tablename__ = "admin_user"
@@ -51,6 +40,7 @@ class Athlete(Base):
     is_minor: Mapped[bool] = mapped_column(default=False)
 
     province: Mapped[str | None] = mapped_column(Text, nullable=True)
+    city: Mapped[str | None] = mapped_column(Text, nullable=True)
     sport: Mapped[str] = mapped_column(Text)
     discipline: Mapped[str | None] = mapped_column(Text, nullable=True)
     category: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -63,8 +53,11 @@ class Athlete(Base):
     achievements: Mapped[list] = mapped_column(JSONB, default=list)
     photo_s3_key: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    guardian_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("guardian.id"), nullable=True)
-    guardian: Mapped[Guardian | None] = relationship(lazy="joined")
+    # A minor's guardian is intentionally NOT a separate account/entity — the
+    # minor manages their own login and profile. This is just the legally
+    # necessary bit: who authorized it, and when. See migration 0005.
+    guardian_email: Mapped[str | None] = mapped_column(Text, nullable=True)
+    guardian_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     identity_verified: Mapped[bool] = mapped_column(default=False)
     identity_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -89,6 +82,7 @@ class Athlete(Base):
     contact_email: Mapped[str] = mapped_column(Text)
 
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     admin_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

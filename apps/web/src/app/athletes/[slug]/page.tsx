@@ -10,6 +10,10 @@ async function loadAthlete(slug: string) {
   }
 }
 
+function location(athlete: { city: string | null; province: string | null }): string {
+  return [athlete.city, athlete.province].filter(Boolean).join(", ") || "Argentina";
+}
+
 export async function generateMetadata(props: PageProps<"/athletes/[slug]">): Promise<Metadata> {
   const { slug } = await props.params;
   const athlete = await loadAthlete(slug);
@@ -18,7 +22,7 @@ export async function generateMetadata(props: PageProps<"/athletes/[slug]">): Pr
   const activeCampaign = athlete.campaigns.find((c) => c.status === "active");
   const description = activeCampaign
     ? `${activeCampaign.title} — ayudá a ${athlete.full_name} a llegar.`
-    : `${athlete.sport} · ${athlete.province ?? "Argentina"}`;
+    : `${athlete.sport} · ${location(athlete)}`;
 
   return {
     title: `${athlete.full_name} — ${athlete.sport}`,
@@ -83,7 +87,7 @@ export default async function AthleteProfilePage(props: PageProps<"/athletes/[sl
           <h1 className="text-2xl font-bold text-foreground">{athlete.full_name}</h1>
           <p className="mt-1 text-muted-foreground">
             {athlete.sport}
-            {athlete.discipline ? ` · ${athlete.discipline}` : ""} · {athlete.province ?? "Argentina"}
+            {athlete.discipline ? ` · ${athlete.discipline}` : ""} · {location(athlete)}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Badge label="Identidad verificada" active={athlete.identity_verified} />

@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -15,11 +15,11 @@ from app.schemas.schemas import (
     AuditLogEntryOut,
     CampaignOut,
     EvidenceFileOut,
-    GuardianOut,
     RejectRequest,
     RequestInfoRequest,
     SuspendRequest,
 )
+from app.services.reapplication import reapply_available_at
 from app.services.s3 import public_url
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(get_current_admin)])
@@ -31,10 +31,7 @@ async def _load_athlete_or_404(db: AsyncSession, athlete_id) -> Athlete:
     stmt = (
         select(Athlete)
         .where(Athlete.id == athlete_id)
-        .options(
-            selectinload(Athlete.campaigns).selectinload(Campaign.breakdown_items),
-            selectinload(Athlete.guardian),
-        )
+        .options(selectinload(Athlete.campaigns).selectinload(Campaign.breakdown_items))
     )
     athlete = (await db.execute(stmt)).scalar_one_or_none()
     if athlete is None:
@@ -50,6 +47,7 @@ def _detail(athlete: Athlete, evidence: list[EvidenceFile]) -> AthleteAdminDetai
         full_name=athlete.full_name,
         photo_url=public_url(athlete.photo_s3_key),
         province=athlete.province,
+        city=athlete.city,
         sport=athlete.sport,
         discipline=athlete.discipline,
         category=athlete.category,
@@ -73,11 +71,14 @@ def _detail(athlete: Athlete, evidence: list[EvidenceFile]) -> AthleteAdminDetai
         cbu=athlete.cbu,
         alias_public=athlete.alias_public,
         contact_email=athlete.contact_email,
+        guardian_email=athlete.guardian_email,
+        guardian_consent_at=athlete.guardian_consent_at,
         rejection_reason=athlete.rejection_reason,
+        rejected_at=athlete.rejected_at,
+        reapply_available_at=reapply_available_at(athlete),
         admin_notes=athlete.admin_notes,
         created_at=athlete.created_at,
         campaigns=[CampaignOut.model_validate(c) for c in athlete.campaigns],
-        guardian=GuardianOut.model_validate(athlete.guardian) if athlete.guardian else None,
         evidence=[EvidenceFileOut.model_validate(e) for e in evidence],
     )
 
@@ -175,6 +176,7 @@ async def reject_athlete(
     athlete = await _load_athlete_or_404(db, athlete_id)
     athlete.status = "rejected"
     athlete.rejection_reason = payload.reason
+    athlete.rejected_at = datetime.now(timezone.utc)
 
     await _log(db, admin, athlete.id, "reject", {"reason": payload.reason})
     return await _commit_and_reload_detail(db, athlete)

@@ -54,13 +54,6 @@ export function ProfileEditor({ athlete, accessToken }: { athlete: AthleteDetail
     <section className="mt-8 space-y-5 border-t border-border pt-6">
       <h2 className="text-sm font-semibold text-muted-foreground uppercase">Tu perfil</h2>
 
-      {athlete.is_minor && (
-        <p className="rounded-lg bg-accent-soft px-3 py-2 text-sm text-accent-strong">
-          Como tutor legal, marcar un canal de contacto como público es tu autorización para
-          mostrarlo en el perfil.
-        </p>
-      )}
-
       <label className="block">
         <span className="text-sm font-medium text-foreground/90">Biografía breve</span>
         <textarea

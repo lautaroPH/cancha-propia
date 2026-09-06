@@ -1,23 +1,18 @@
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel, EmailStr, Field, model_validator
-
-
-class GuardianIn(BaseModel):
-    full_name: str
-    relationship: str
-    email: EmailStr
-    phone: str | None = None
-    national_id: str | None = None  # optional identity anchor for a minor, see plan §2
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 
 class ApplicationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     full_name: str
     date_of_birth: date
     national_id: str = Field(min_length=4)  # hashed on write, never stored in plaintext
 
     province: str | None = None
+    city: str | None = None
     sport: str
     discipline: str | None = None
     category: str | None = None
@@ -27,17 +22,25 @@ class ApplicationCreate(BaseModel):
 
     bio: str | None = None
     story: str | None = None
-    contact_email: EmailStr
+    # No contact_email here on purpose — it's derived server-side from the
+    # authenticated session, always, even for a minor (they hold their own
+    # account — see plan discussion on simplifying the guardian flow).
 
     evidence_links: list[str] = Field(default_factory=list)  # federation/ranking/result URLs submitted at intake
 
-    guardian: GuardianIn | None = None
+    # A minor doesn't manage a separate guardian account — this is just the
+    # legally necessary bit: who authorized the profile, captured once here.
+    guardian_email: EmailStr | None = None
+    guardian_consent: bool = False
 
     @model_validator(mode="after")
-    def guardian_required_if_minor(self) -> "ApplicationCreate":
+    def guardian_consent_required_if_minor(self) -> "ApplicationCreate":
         age_years = (date.today() - self.date_of_birth).days / 365.25
-        if age_years < 18 and self.guardian is None:
-            raise ValueError("guardian is required for applicants under 18")
+        if age_years < 18:
+            if not self.guardian_email:
+                raise ValueError("guardian_email is required for applicants under 18")
+            if not self.guardian_consent:
+                raise ValueError("guardian consent is required for applicants under 18")
         return self
 
 
@@ -67,6 +70,11 @@ class CampaignOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AthleteFacets(BaseModel):
+    sports: list[str]
+    provinces: list[str]
+
+
 class AthleteCard(BaseModel):
     """Directory listing — trimmed for list views."""
 
@@ -74,6 +82,7 @@ class AthleteCard(BaseModel):
     full_name: str
     photo_url: str | None
     province: str | None
+    city: str | None
     sport: str
     discipline: str | None
     identity_verified: bool
@@ -91,6 +100,7 @@ class AthleteProfile(BaseModel):
     full_name: str
     photo_url: str | None
     province: str | None
+    city: str | None
     sport: str
     discipline: str | None
     category: str | None
@@ -122,7 +132,11 @@ class AthleteAdminView(AthleteProfile):
     is_minor: bool
     federation_license_number: str | None
     contact_email: str
+    guardian_email: str | None
+    guardian_consent_at: datetime | None
     rejection_reason: str | None
+    rejected_at: datetime | None
+    reapply_available_at: datetime | None
     admin_notes: str | None
     next_review_due: date | None
     created_at: datetime
@@ -152,15 +166,6 @@ class EvidenceFileOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class GuardianOut(BaseModel):
-    full_name: str
-    relationship: str
-    email: str
-    phone: str | None
-
-    model_config = {"from_attributes": True}
-
-
 class AuditLogEntryOut(BaseModel):
     action: str
     detail: dict | None
@@ -170,12 +175,11 @@ class AuditLogEntryOut(BaseModel):
 
 class AthleteAdminDetail(AthleteAdminView):
     """Full admin detail view — unlike AthleteAdminView, contact fields are never
-    gated by the athlete's public/private toggle, and includes evidence + guardian."""
+    gated by the athlete's public/private toggle, and includes evidence."""
 
     instagram_public: bool
     whatsapp_public: bool
     alias_public: bool
-    guardian: GuardianOut | None
     evidence: list[EvidenceFileOut]
 
 

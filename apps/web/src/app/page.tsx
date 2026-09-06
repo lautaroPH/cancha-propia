@@ -61,7 +61,9 @@ export default async function DirectoryPage() {
                 <p className="text-sm text-muted-foreground">
                   {athlete.sport}
                   {athlete.discipline ? ` · ${athlete.discipline}` : ""}
-                  {athlete.province ? ` · ${athlete.province}` : ""}
+                  {athlete.city || athlete.province
+                    ? ` · ${[athlete.city, athlete.province].filter(Boolean).join(", ")}`
+                    : ""}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {athlete.identity_verified && athlete.career_verified && athlete.competition_verified && (

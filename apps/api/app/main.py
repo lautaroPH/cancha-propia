@@ -19,6 +19,11 @@ app.include_router(athletes.router)
 app.include_router(admin.router)
 app.include_router(me.router)
 
+if settings.dev_auth_enabled:
+    from app.routers import dev_auth
+
+    app.include_router(dev_auth.router)
+
 
 @app.get("/health")
 async def health():

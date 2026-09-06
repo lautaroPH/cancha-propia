@@ -13,6 +13,7 @@ export type AthleteCard = {
   full_name: string;
   photo_url: string | null;
   province: string | null;
+  city: string | null;
   sport: string;
   discipline: string | null;
   identity_verified: boolean;
@@ -42,6 +43,7 @@ export type AthleteProfile = {
   full_name: string;
   photo_url: string | null;
   province: string | null;
+  city: string | null;
   sport: string;
   discipline: string | null;
   category: string | null;
@@ -65,6 +67,7 @@ export type ApplicationPayload = {
   date_of_birth: string;
   national_id: string;
   province?: string;
+  city?: string;
   sport: string;
   discipline?: string;
   category?: string;
@@ -73,14 +76,11 @@ export type ApplicationPayload = {
   federation_license_number?: string;
   bio?: string;
   story?: string;
-  contact_email: string;
   evidence_links: string[];
-  guardian?: {
-    full_name: string;
-    relationship: string;
-    email: string;
-    phone?: string;
-  };
+  // Minors hold their own account (contact_email is always the caller's own
+  // login) — the guardian is consent-only, captured here, not a separate account.
+  guardian_email?: string;
+  guardian_consent?: boolean;
 };
 
 export type AdminAthleteListItem = {
@@ -103,13 +103,6 @@ export type EvidenceFileEntry = {
   uploaded_at: string;
 };
 
-export type GuardianInfo = {
-  full_name: string;
-  relationship: string;
-  email: string;
-  phone: string | null;
-};
-
 export type AthleteDetail = AthleteProfile & {
   id: string;
   status: string;
@@ -117,7 +110,11 @@ export type AthleteDetail = AthleteProfile & {
   is_minor: boolean;
   federation_license_number: string | null;
   contact_email: string;
+  guardian_email: string | null;
+  guardian_consent_at: string | null;
   rejection_reason: string | null;
+  rejected_at: string | null;
+  reapply_available_at: string | null;
   admin_notes: string | null;
   next_review_due: string | null;
   created_at: string;
@@ -127,7 +124,6 @@ export type AthleteDetail = AthleteProfile & {
 };
 
 export type AthleteAdminDetail = AthleteDetail & {
-  guardian: GuardianInfo | null;
   evidence: EvidenceFileEntry[];
 };
 
@@ -193,10 +189,19 @@ export function getAthlete(slug: string) {
   return apiFetch<AthleteProfile>(`/athletes/${slug}`, { cache: "no-store" });
 }
 
-export function submitApplication(payload: ApplicationPayload) {
-  return apiFetch<{ id: string; slug: string; status: string }>("/applications", {
+export function submitApplication(token: string, payload: ApplicationPayload) {
+  return authedFetch<{ id: string; slug: string; status: string }>(token, "/applications", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+// --- Local dev only: instant account switching, bypasses email entirely ---
+
+export function devIssueOtp(email: string) {
+  return apiFetch<{ email: string; token: string }>("/dev/otp", {
+    method: "POST",
+    body: JSON.stringify({ email }),
   });
 }
 

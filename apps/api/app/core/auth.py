@@ -98,26 +98,12 @@ async def get_current_athlete(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Athlete:
+    # auth_user_id is set directly at application-submission time (see
+    # POST /applications) — contact_email is informational only, never used
+    # to infer identity, so there's nothing to fall back to here.
     athlete = (
         await db.execute(select(Athlete).where(Athlete.auth_user_id == user.auth_user_id))
     ).scalar_one_or_none()
-
-    if athlete is None:
-        # First login for this account: claim any unlinked profile whose contact_email
-        # matches — they've already proven control of that inbox via the magic link,
-        # which is the same bar the application process itself relies on.
-        athlete = (
-            await db.execute(
-                select(Athlete).where(
-                    Athlete.contact_email == user.email, Athlete.auth_user_id.is_(None)
-                )
-            )
-        ).scalar_one_or_none()
-        if athlete is not None:
-            athlete.auth_user_id = user.auth_user_id
-            await db.commit()
-            await db.refresh(athlete)
-
     if athlete is None:
         raise HTTPException(status_code=403, detail="No athlete profile linked to this account")
     return athlete

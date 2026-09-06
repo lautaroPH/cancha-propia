@@ -1,7 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { submitApplication } from "@/lib/api";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { submitApplication, getMe, ApiError } from "@/lib/api";
+import { createClient } from "@/lib/supabase/client";
+import { PROVINCES, SPORTS } from "@/lib/constants";
 
 function isMinor(dateOfBirth: string): boolean {
   if (!dateOfBirth) return false;
@@ -12,10 +15,53 @@ function isMinor(dateOfBirth: string): boolean {
 }
 
 export default function ApplyPage() {
-  const [status, setStatus] = useState<"idle" | "submitting" | "done" | "error">("idle");
+  const router = useRouter();
+  // "checking": verifying login + whether this account already applied, before
+  // showing anything — avoids a flash of the form for someone about to be redirected.
+  const [status, setStatus] = useState<"checking" | "idle" | "submitting" | "done" | "error">("checking");
   const [errorMessage, setErrorMessage] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+  const [sessionEmail, setSessionEmail] = useState("");
+  const [accessToken, setAccessToken] = useState("");
+  const [reapplyAvailableAt, setReapplyAvailableAt] = useState<string | null>(null);
   const minor = useMemo(() => isMinor(dateOfBirth), [dateOfBirth]);
+
+  // Applying requires being logged in — that's what lets us link the
+  // application to your account directly (auth_user_id) instead of guessing
+  // from a typed email. Also blocks applying twice, with one exception: a
+  // rejected applicant can resubmit (after a cooldown, enforced server-side).
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getSession().then(async ({ data }) => {
+      const session = data.session;
+      if (!session) {
+        router.replace("/login?next=/apply");
+        return;
+      }
+      setAccessToken(session.access_token);
+      setSessionEmail(session.user.email ?? "");
+
+      try {
+        const athlete = await getMe(session.access_token);
+        if (athlete.status === "rejected") {
+          setReapplyAvailableAt(athlete.reapply_available_at);
+          setStatus("idle");
+        } else {
+          // pending/active/suspended — already has a live application.
+          router.replace("/dashboard");
+        }
+      } catch (err) {
+        // 403 = no application yet, the expected case — show the form.
+        // Anything else is a real failure, surface it instead of guessing.
+        if (err instanceof ApiError && err.status === 403) {
+          setStatus("idle");
+        } else {
+          setErrorMessage(err instanceof Error ? err.message : "No se pudo verificar tu cuenta.");
+          setStatus("error");
+        }
+      }
+    });
+  }, [router]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -26,36 +72,45 @@ export default function ApplyPage() {
     const evidenceLinksRaw = String(form.get("evidence_links") ?? "");
 
     try {
-      await submitApplication({
+      await submitApplication(accessToken, {
         full_name: String(form.get("full_name")),
         date_of_birth: String(form.get("date_of_birth")),
         national_id: String(form.get("national_id")),
         province: String(form.get("province") || "") || undefined,
+        city: String(form.get("city") || "") || undefined,
         sport: String(form.get("sport")),
         discipline: String(form.get("discipline") || "") || undefined,
+        category: String(form.get("category") || "") || undefined,
         club: String(form.get("club") || "") || undefined,
         federation: String(form.get("federation") || "") || undefined,
         bio: String(form.get("bio") || "") || undefined,
         story: String(form.get("story") || "") || undefined,
-        contact_email: String(form.get("contact_email")),
         evidence_links: evidenceLinksRaw
           .split("\n")
           .map((l) => l.trim())
           .filter(Boolean),
-        guardian: minor
-          ? {
-              full_name: String(form.get("guardian_full_name")),
-              relationship: String(form.get("guardian_relationship")),
-              email: String(form.get("guardian_email")),
-              phone: String(form.get("guardian_phone") || "") || undefined,
-            }
-          : undefined,
+        guardian_email: minor ? String(form.get("guardian_email")) : undefined,
+        guardian_consent: minor ? form.get("guardian_consent") === "on" : undefined,
       });
       setStatus("done");
     } catch (err) {
       setStatus("error");
-      setErrorMessage(err instanceof Error ? err.message : "Algo salió mal. Intentá de nuevo.");
+      if (err instanceof ApiError && err.status === 429) {
+        setErrorMessage(
+          reapplyAvailableAt
+            ? `Todavía no podés volver a postularte — podés intentar de nuevo a partir del ${new Date(
+                reapplyAvailableAt
+              ).toLocaleString("es-AR")}.`
+            : "Todavía no podés volver a postularte. Probá de nuevo más tarde."
+        );
+      } else {
+        setErrorMessage(err instanceof Error ? err.message : "Algo salió mal. Intentá de nuevo.");
+      }
     }
+  }
+
+  if (status === "checking") {
+    return <div className="mx-auto max-w-xl px-6 py-16" />;
   }
 
   if (status === "done") {
@@ -64,7 +119,8 @@ export default function ApplyPage() {
         <h1 className="text-2xl font-bold text-foreground">¡Recibimos tu postulación!</h1>
         <p className="mt-3 text-muted-foreground">
           Un administrador va a revisar tu información y evidencia en los próximos días. Te vamos a
-          escribir al email que dejaste apenas tengamos una respuesta.
+          escribir a <span className="font-medium text-foreground">{sessionEmail}</span> apenas
+          tengamos una respuesta.
         </p>
       </div>
     );
@@ -77,9 +133,22 @@ export default function ApplyPage() {
         Esta información es privada y se usa solo para verificar tu identidad y trayectoria deportiva.
         Vos elegís después qué mostrar en tu perfil público.
       </p>
+      {sessionEmail && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Postulando con la cuenta <span className="font-medium text-foreground">{sessionEmail}</span> —
+          ahí vamos a avisarte cuando la revisemos.
+        </p>
+      )}
+
+      {reapplyAvailableAt && new Date(reapplyAvailableAt) > new Date() && (
+        <p className="mt-4 rounded-lg bg-accent-soft px-3 py-2 text-sm text-accent-strong">
+          Tu postulación anterior fue rechazada. Podés volver a postularte a partir del{" "}
+          {new Date(reapplyAvailableAt).toLocaleString("es-AR")}.
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-        <Field label="Nombre completo" name="full_name" required />
+        <Field label="Nombre completo" name="full_name" placeholder="Martina López" required />
         <div className="grid grid-cols-2 gap-4">
           <Field
             label="Fecha de nacimiento"
@@ -88,39 +157,78 @@ export default function ApplyPage() {
             required
             onChange={(e) => setDateOfBirth(e.target.value)}
           />
-          <Field label="DNI" name="national_id" required />
+          <Field label="DNI" name="national_id" placeholder="30111222" required />
         </div>
-        <Field label="Email de contacto" name="contact_email" type="email" required />
 
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Deporte" name="sport" required />
-          <Field label="Disciplina / categoría" name="discipline" />
+          <Field label="Deporte" name="sport" placeholder="Judo" list={SPORTS} required />
+          <Field label="Categoría" name="category" placeholder="Juvenil, Sub-20, Senior..." />
+        </div>
+        <Field
+          label="Disciplina / prueba / categoría de peso"
+          name="discipline"
+          placeholder="-63kg, estilos libres 100m, maratón..."
+        />
+        <p className="-mt-3 text-xs text-muted-foreground">
+          La categoría es tu franja competitiva (edad o nivel); la disciplina es la prueba, estilo o
+          categoría de peso específica dentro de tu deporte.
+        </p>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Provincia" name="province" placeholder="Buenos Aires" list={PROVINCES} />
+          <Field label="Ciudad" name="city" placeholder="Mar del Plata" />
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Provincia" name="province" />
-          <Field label="Club" name="club" />
+          <Field label="Club" name="club" placeholder="Club Atlético River Plate" />
+          <Field label="Federación" name="federation" placeholder="Federación Argentina de Judo" />
         </div>
-        <Field label="Federación" name="federation" />
 
-        <TextArea label="Breve biografía" name="bio" rows={2} />
-        <TextArea label="Tu historia deportiva" name="story" rows={4} />
+        <TextArea
+          label="Breve biografía"
+          name="bio"
+          rows={2}
+          placeholder="Una o dos frases sobre quién sos como atleta."
+        />
+        <TextArea
+          label="Tu historia deportiva"
+          name="story"
+          rows={4}
+          placeholder="Cómo empezaste, tu trayectoria, y por qué necesitás apoyo ahora."
+        />
         <TextArea
           label="Enlaces de evidencia (uno por línea)"
           name="evidence_links"
           rows={3}
-          placeholder="Página de tu federación, ranking oficial, resultados de competencias..."
+          placeholder="Página de tu federación, ranking oficial, resultados de competencias, tu Instagram u otra red social donde se vea tu carrera deportiva..."
         />
+        <p className="-mt-3 text-xs text-muted-foreground">
+          Tu Instagram u otra red social también sirve como evidencia — ayuda a confirmar que sos
+          quien decís ser y a ver tu trayectoria real.
+        </p>
 
         {minor && (
           <div className="space-y-4 rounded-lg border border-accent-soft bg-accent-soft/50 p-4">
             <p className="text-sm text-foreground/90">
-              Como sos menor de edad, necesitamos los datos de tu madre, padre o tutor legal — ellos
-              van a autorizar y controlar tu perfil.
+              Como sos menor de edad, tu perfil público necesita la autorización de tu madre, padre o
+              tutor/a legal. Vos seguís manejando tu propia cuenta — esto es solo su consentimiento.
             </p>
-            <Field label="Nombre completo del tutor" name="guardian_full_name" required={minor} />
-            <Field label="Relación (madre, padre, tutor legal...)" name="guardian_relationship" required={minor} />
-            <Field label="Email del tutor" name="guardian_email" type="email" required={minor} />
-            <Field label="Teléfono del tutor" name="guardian_phone" />
+            <Field
+              label="Email de tu madre, padre o tutor/a legal"
+              name="guardian_email"
+              type="email"
+              placeholder="ana@example.com"
+              required={minor}
+            />
+            <label className="flex items-start gap-2 text-sm text-foreground/90">
+              <input
+                type="checkbox"
+                name="guardian_consent"
+                required={minor}
+                className="mt-0.5 size-4 rounded border-border text-accent focus:ring-accent"
+              />
+              Confirmo que mi madre, padre o tutor/a legal está al tanto de esta postulación y
+              autoriza la publicación de mi perfil.
+            </label>
           </div>
         )}
 
@@ -143,14 +251,21 @@ function Field({
   name,
   type = "text",
   required,
+  value,
+  placeholder,
+  list,
   onChange,
 }: {
   label: string;
   name: string;
   type?: string;
   required?: boolean;
+  value?: string;
+  placeholder?: string;
+  list?: string[];
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
+  const listId = list ? `${name}-options` : undefined;
   return (
     <label className="block">
       <span className="text-sm font-medium text-foreground/90">{label}</span>
@@ -158,9 +273,19 @@ function Field({
         name={name}
         type={type}
         required={required}
+        value={value}
+        placeholder={placeholder}
+        list={listId}
         onChange={onChange}
-        className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+        className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
       />
+      {list && (
+        <datalist id={listId}>
+          {list.map((option) => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
+      )}
     </label>
   );
 }

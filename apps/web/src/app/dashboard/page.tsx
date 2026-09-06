@@ -17,22 +17,9 @@ export default async function DashboardPage() {
     athlete = await getMe(session.access_token);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) redirect("/login?next=/dashboard");
-    if (err instanceof ApiError && err.status === 403) {
-      return (
-        <div className="mx-auto max-w-lg px-6 py-20 text-center">
-          <h1 className="text-xl font-bold text-foreground">No encontramos tu perfil</h1>
-          <p className="mt-3 text-muted-foreground">
-            Esta cuenta ({session.user.email}) todavía no tiene una postulación asociada.
-          </p>
-          <Link
-            href="/apply"
-            className="mt-6 inline-block rounded-lg bg-accent px-4 py-2 font-medium text-accent-foreground hover:opacity-90"
-          >
-            Postularme
-          </Link>
-        </div>
-      );
-    }
+    // No application linked to this account yet — send them straight to the form
+    // instead of making them click through an intermediate "no profile" screen.
+    if (err instanceof ApiError && err.status === 403) redirect("/apply");
     throw err;
   }
 
@@ -58,13 +45,62 @@ export default async function DashboardPage() {
       </div>
       <p className="mt-2 text-sm text-muted-foreground">{statusMessage[athlete.status]}</p>
 
-      <ProfileEditor athlete={athlete} accessToken={session.access_token} />
+      {athlete.status === "rejected" ? (
+        <div className="mt-6 rounded-lg border border-border bg-surface p-4">
+          {athlete.reapply_available_at && new Date(athlete.reapply_available_at) > new Date() ? (
+            <p className="text-sm text-muted-foreground">
+              Podés volver a postularte a partir del{" "}
+              {new Date(athlete.reapply_available_at).toLocaleString("es-AR")}.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Podés corregir tu postulación y volver a enviarla cuando quieras.
+              </p>
+              <Link
+                href="/apply"
+                className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:opacity-90"
+              >
+                Volver a postularme
+              </Link>
+            </>
+          )}
+        </div>
+      ) : (
+        <>
+          <section className="mt-6 grid grid-cols-2 gap-4 rounded-lg border border-border bg-surface p-4 text-sm sm:grid-cols-3">
+            <InfoField label="Deporte" value={athlete.sport} />
+            <InfoField label="Categoría" value={athlete.category} />
+            <InfoField label="Disciplina" value={athlete.discipline} />
+            <InfoField label="Provincia" value={athlete.province} />
+            <InfoField label="Ciudad" value={athlete.city} />
+            <InfoField label="Club" value={athlete.club} />
+            <InfoField label="Federación" value={athlete.federation} />
+            <InfoField label="Fecha de nacimiento" value={athlete.date_of_birth} />
+          </section>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Para cambiar deporte, club, federación o categoría escribinos — esos cambios requieren
+            una nueva revisión, así que no se editan directo desde acá.
+          </p>
 
-      <CampaignEditor
-        accessToken={session.access_token}
-        activeCampaign={activeCampaign}
-        draftCampaigns={draftCampaigns}
-      />
+          <ProfileEditor athlete={athlete} accessToken={session.access_token} />
+
+          <CampaignEditor
+            accessToken={session.access_token}
+            activeCampaign={activeCampaign}
+            draftCampaigns={draftCampaigns}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+function InfoField({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div>
+      <p className="text-muted-foreground">{label}</p>
+      <p className="text-foreground">{value ?? "—"}</p>
     </div>
   );
 }

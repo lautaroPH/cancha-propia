@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { DevQuickSwitch } from "@/components/dev-quick-switch";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -81,6 +82,8 @@ function LoginForm() {
           {status === "sending" ? "Enviando..." : "Enviar enlace de acceso"}
         </button>
       </form>
+
+      {process.env.NODE_ENV === "development" && <DevQuickSwitch />}
     </div>
   );
 }

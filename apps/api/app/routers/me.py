@@ -13,6 +13,7 @@ from app.schemas.schemas import (
     CampaignOut,
     CampaignRaisedUpdate,
 )
+from app.services.reapplication import reapply_available_at
 from app.services.s3 import public_url
 
 router = APIRouter(prefix="/me", tags=["me"])
@@ -26,6 +27,7 @@ def _self_view(athlete: Athlete) -> AthleteSelfView:
         full_name=athlete.full_name,
         photo_url=public_url(athlete.photo_s3_key),
         province=athlete.province,
+        city=athlete.city,
         sport=athlete.sport,
         discipline=athlete.discipline,
         category=athlete.category,
@@ -49,7 +51,11 @@ def _self_view(athlete: Athlete) -> AthleteSelfView:
         cbu=athlete.cbu,
         alias_public=athlete.alias_public,
         contact_email=athlete.contact_email,
+        guardian_email=athlete.guardian_email,
+        guardian_consent_at=athlete.guardian_consent_at,
         rejection_reason=athlete.rejection_reason,
+        rejected_at=athlete.rejected_at,
+        reapply_available_at=reapply_available_at(athlete),
         admin_notes=None,
         created_at=athlete.created_at,
         campaigns=[CampaignOut.model_validate(c) for c in athlete.campaigns],
