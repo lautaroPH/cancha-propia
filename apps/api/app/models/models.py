@@ -12,7 +12,7 @@ CampaignStatus = ENUM(
     "draft", "active", "grace", "closed", "expired", "paused", name="campaign_status", create_type=False
 )
 EvidenceKind = ENUM(
-    "id_document", "federation_link", "competition_result", "ranking", "photo", "other",
+    "id_document", "selfie_with_id", "federation_link", "competition_result", "ranking", "photo", "other",
     name="evidence_kind", create_type=False,
 )
 ReportStatus = ENUM("open", "resolved", name="report_status", create_type=False)
@@ -80,11 +80,22 @@ class Athlete(Base):
     cbu: Mapped[str | None] = mapped_column(Text, nullable=True)
     alias_public: Mapped[bool] = mapped_column(default=False)
 
+    # External only — the plan explicitly cuts an internal raffle system.
+    # This just displays a link to wherever the athlete runs their own raffle.
+    raffle_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raffle_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raffle_public: Mapped[bool] = mapped_column(default=False)
+
     national_id_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     contact_email: Mapped[str] = mapped_column(Text)
 
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Athlete-visible — unlike admin_notes, which is internal commentary only.
+    info_requested_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    info_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    suspended_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     admin_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -151,6 +162,19 @@ class Report(Base):
     resolved_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SportOption(Base):
+    """Admin-managed canonical sport list (plan §12 phase 5: "so you're not
+    hardcoding sport lists"). Suggestions only — the athlete's `sport` field
+    stays free-text, this just drives the apply form's datalist."""
+
+    __tablename__ = "sport_option"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(Text, unique=True)
+    active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class AdminAuditLog(Base):

@@ -36,9 +36,20 @@ export default async function AdminQueuePage() {
           <h1 className="text-2xl font-bold text-foreground">Postulaciones pendientes</h1>
           <p className="mt-1 text-sm text-muted-foreground">{session.user.email}</p>
         </div>
-        <Link href="/admin/athletes" className="text-sm font-medium text-accent hover:underline">
-          Ver todos los atletas →
-        </Link>
+        <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
+          <Link href="/admin/reports" className="text-accent hover:underline">
+            Reportes →
+          </Link>
+          <Link href="/admin/campaigns/expiring" className="text-accent hover:underline">
+            Campañas vencidas →
+          </Link>
+          <Link href="/admin/athletes" className="text-accent hover:underline">
+            Ver todos los atletas →
+          </Link>
+          <Link href="/admin/sports" className="text-accent hover:underline">
+            Deportes →
+          </Link>
+        </div>
       </div>
 
       {applications.length === 0 ? (

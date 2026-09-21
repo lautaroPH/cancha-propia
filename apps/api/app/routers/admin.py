@@ -7,21 +7,36 @@ from sqlalchemy.orm import selectinload
 
 from app.core.auth import get_current_admin
 from app.core.db import get_db
-from app.models.models import AdminAuditLog, AdminUser, Athlete, Campaign, EvidenceFile
+from app.models.models import AdminAuditLog, AdminUser, Athlete, Campaign, EvidenceFile, Report, SportOption
 from app.schemas.schemas import (
     AdminAthleteListItem,
     ApproveRequest,
     AthleteAdminDetail,
     AuditLogEntryOut,
+    CampaignAdminOut,
     CampaignOut,
     CampaignPauseRequest,
+    EvidenceDownloadUrl,
     EvidenceFileOut,
     RejectRequest,
+    ReportOut,
+    ReportResolveRequest,
     RequestInfoRequest,
+    SportOptionCreate,
+    SportOptionOut,
+    SportOptionUpdate,
     SuspendRequest,
 )
+from app.services.campaign_lifecycle import run_expiry_sweep
+from app.services.notifications import (
+    notify_approved,
+    notify_info_requested,
+    notify_reactivated,
+    notify_rejected,
+    notify_suspended,
+)
 from app.services.reapplication import reapply_available_at
-from app.services.s3 import public_url
+from app.services.s3 import presigned_read_url, public_url
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(get_current_admin)])
 
@@ -78,12 +93,19 @@ def _detail(athlete: Athlete, evidence: list[EvidenceFile]) -> AthleteAdminDetai
         alias=athlete.alias,
         cbu=athlete.cbu,
         alias_public=athlete.alias_public,
+        raffle_url=athlete.raffle_url,
+        raffle_description=athlete.raffle_description,
+        raffle_public=athlete.raffle_public,
         contact_email=athlete.contact_email,
         guardian_email=athlete.guardian_email,
         guardian_consent_at=athlete.guardian_consent_at,
         rejection_reason=athlete.rejection_reason,
         rejected_at=athlete.rejected_at,
         reapply_available_at=reapply_available_at(athlete),
+        info_requested_message=athlete.info_requested_message,
+        info_requested_at=athlete.info_requested_at,
+        suspended_reason=athlete.suspended_reason,
+        suspended_at=athlete.suspended_at,
         admin_notes=athlete.admin_notes,
         created_at=athlete.created_at,
         campaigns=[CampaignOut.model_validate(c) for c in athlete.campaigns],
@@ -171,7 +193,9 @@ async def approve_athlete(
             "competition_verified": payload.competition_verified,
         },
     )
-    return await _commit_and_reload_detail(db, athlete)
+    detail = await _commit_and_reload_detail(db, athlete)
+    notify_approved(athlete)
+    return detail
 
 
 @router.post("/athletes/{athlete_id}/reject", response_model=AthleteAdminDetail)
@@ -187,7 +211,9 @@ async def reject_athlete(
     athlete.rejected_at = datetime.now(timezone.utc)
 
     await _log(db, admin, athlete.id, "reject", {"reason": payload.reason})
-    return await _commit_and_reload_detail(db, athlete)
+    detail = await _commit_and_reload_detail(db, athlete)
+    notify_rejected(athlete)
+    return detail
 
 
 @router.post("/athletes/{athlete_id}/request-info", response_model=AthleteAdminDetail)
@@ -198,10 +224,14 @@ async def request_more_info(
     admin: AdminUser = Depends(get_current_admin),
 ):
     athlete = await _load_athlete_or_404(db, athlete_id)
+    athlete.info_requested_message = payload.message
+    athlete.info_requested_at = datetime.now(timezone.utc)
     _append_note(athlete, f"[Info requested] {payload.message}")
 
     await _log(db, admin, athlete.id, "request_info", {"message": payload.message})
-    return await _commit_and_reload_detail(db, athlete)
+    detail = await _commit_and_reload_detail(db, athlete)
+    notify_info_requested(athlete)
+    return detail
 
 
 @router.post("/athletes/{athlete_id}/suspend", response_model=AthleteAdminDetail)
@@ -213,10 +243,14 @@ async def suspend_athlete(
 ):
     athlete = await _load_athlete_or_404(db, athlete_id)
     athlete.status = "suspended"
+    athlete.suspended_reason = payload.reason
+    athlete.suspended_at = datetime.now(timezone.utc)
     _append_note(athlete, f"[Suspended] {payload.reason}")
 
     await _log(db, admin, athlete.id, "suspend", {"reason": payload.reason})
-    return await _commit_and_reload_detail(db, athlete)
+    detail = await _commit_and_reload_detail(db, athlete)
+    notify_suspended(athlete)
+    return detail
 
 
 @router.post("/athletes/{athlete_id}/reactivate", response_model=AthleteAdminDetail)
@@ -227,9 +261,13 @@ async def reactivate_athlete(
 ):
     athlete = await _load_athlete_or_404(db, athlete_id)
     athlete.status = "active"
+    athlete.suspended_reason = None
+    athlete.suspended_at = None
 
     await _log(db, admin, athlete.id, "reactivate")
-    return await _commit_and_reload_detail(db, athlete)
+    detail = await _commit_and_reload_detail(db, athlete)
+    notify_reactivated(athlete)
+    return detail
 
 
 @router.post("/campaigns/{campaign_id}/approve", response_model=CampaignOut)
@@ -309,3 +347,157 @@ async def get_audit_log(athlete_id, db: AsyncSession = Depends(get_db)):
         AuditLogEntryOut(action=log.action, detail=log.detail, admin_email=email, created_at=log.created_at)
         for log, email in rows
     ]
+
+
+@router.get("/athletes/{athlete_id}/evidence/{evidence_id}/download-url", response_model=EvidenceDownloadUrl)
+async def get_evidence_download_url(
+    athlete_id,
+    evidence_id,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    """Short-lived signed URL for a private evidence document (ID/DNI, etc.).
+    Every access is written to the audit log — this is the highest-sensitivity
+    data in the system (plan §10, §11), so who looked at it has to be traceable."""
+    evidence = (
+        await db.execute(
+            select(EvidenceFile).where(EvidenceFile.id == evidence_id, EvidenceFile.athlete_id == athlete_id)
+        )
+    ).scalar_one_or_none()
+    if evidence is None:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+    if evidence.kind == "federation_link":
+        raise HTTPException(status_code=400, detail="This evidence is an external link, not a stored file")
+
+    url = presigned_read_url(evidence.s3_key)
+    await _log(
+        db, admin, athlete_id, "view_evidence",
+        {"evidence_id": str(evidence.id), "kind": evidence.kind, "filename": evidence.original_filename},
+    )
+    await db.commit()
+    return EvidenceDownloadUrl(url=url)
+
+
+@router.get("/campaigns/expiring", response_model=list[CampaignAdminOut])
+async def list_expiring_campaigns(db: AsyncSession = Depends(get_db)):
+    """Campaigns past their event date, needing the athlete to close/renew or
+    an admin to nudge/suspend (plan §6-7 expiry queue)."""
+    await run_expiry_sweep(db)
+
+    stmt = (
+        select(Campaign, Athlete.id, Athlete.slug, Athlete.full_name)
+        .join(Athlete, Athlete.id == Campaign.athlete_id)
+        .where(Campaign.status.in_(["grace", "expired"]))
+        .options(selectinload(Campaign.breakdown_items))
+        .order_by(Campaign.event_date.asc())
+    )
+    rows = (await db.execute(stmt)).all()
+    return [
+        CampaignAdminOut(
+            **CampaignOut.model_validate(campaign).model_dump(),
+            athlete_id=athlete_id,
+            athlete_slug=slug,
+            athlete_full_name=full_name,
+        )
+        for campaign, athlete_id, slug, full_name in rows
+    ]
+
+
+@router.get("/reports", response_model=list[ReportOut])
+async def list_reports(status: str = "open", db: AsyncSession = Depends(get_db)):
+    stmt = (
+        select(Report, Athlete.slug, Athlete.full_name)
+        .join(Athlete, Athlete.id == Report.athlete_id)
+        .where(Report.status == status)
+        .order_by(Report.created_at.asc())
+    )
+    rows = (await db.execute(stmt)).all()
+    return [
+        ReportOut(
+            id=report.id,
+            athlete_id=report.athlete_id,
+            athlete_slug=slug,
+            athlete_full_name=full_name,
+            reason=report.reason,
+            detail=report.detail,
+            status=report.status,
+            resolved_note=report.resolved_note,
+            resolved_at=report.resolved_at,
+            created_at=report.created_at,
+        )
+        for report, slug, full_name in rows
+    ]
+
+
+@router.post("/reports/{report_id}/resolve", response_model=ReportOut)
+async def resolve_report(
+    report_id,
+    payload: ReportResolveRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    stmt = select(Report, Athlete.slug, Athlete.full_name).join(Athlete, Athlete.id == Report.athlete_id).where(
+        Report.id == report_id
+    )
+    row = (await db.execute(stmt)).one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    report, slug, full_name = row
+
+    report.status = "resolved"
+    report.resolved_by = admin.id
+    report.resolved_note = payload.note
+    report.resolved_at = datetime.now(timezone.utc)
+
+    await _log(db, admin, report.athlete_id, "resolve_report", {"report_id": str(report.id), "note": payload.note})
+    await db.commit()
+    await db.refresh(report)
+
+    return ReportOut(
+        id=report.id,
+        athlete_id=report.athlete_id,
+        athlete_slug=slug,
+        athlete_full_name=full_name,
+        reason=report.reason,
+        detail=report.detail,
+        status=report.status,
+        resolved_note=report.resolved_note,
+        resolved_at=report.resolved_at,
+        created_at=report.created_at,
+    )
+
+
+@router.get("/sports", response_model=list[SportOptionOut])
+async def list_sports(db: AsyncSession = Depends(get_db)):
+    """All sports, active and inactive — the public GET /sports only returns
+    active ones. Deactivating rather than deleting keeps a sport already used
+    by existing athletes intact."""
+    stmt = select(SportOption).order_by(SportOption.name)
+    return (await db.execute(stmt)).scalars().all()
+
+
+@router.post("/sports", response_model=SportOptionOut, status_code=201)
+async def create_sport(payload: SportOptionCreate, db: AsyncSession = Depends(get_db)):
+    existing = (
+        await db.execute(select(SportOption).where(SportOption.name == payload.name))
+    ).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=409, detail="A sport with this name already exists")
+
+    sport = SportOption(name=payload.name)
+    db.add(sport)
+    await db.commit()
+    await db.refresh(sport)
+    return sport
+
+
+@router.patch("/sports/{sport_id}", response_model=SportOptionOut)
+async def update_sport(sport_id, payload: SportOptionUpdate, db: AsyncSession = Depends(get_db)):
+    sport = (await db.execute(select(SportOption).where(SportOption.id == sport_id))).scalar_one_or_none()
+    if sport is None:
+        raise HTTPException(status_code=404, detail="Sport not found")
+
+    sport.active = payload.active
+    await db.commit()
+    await db.refresh(sport)
+    return sport

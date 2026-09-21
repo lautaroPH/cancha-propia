@@ -8,6 +8,12 @@ export class ApiError extends Error {
   }
 }
 
+export type SportOption = {
+  id: string;
+  name: string;
+  active: boolean;
+};
+
 export type AthleteCard = {
   slug: string;
   full_name: string;
@@ -38,6 +44,34 @@ export type Campaign = {
   breakdown_items: CampaignBreakdownItem[];
 };
 
+// Mirrors app/schemas/schemas.py REPORT_REASONS on the backend, which validates it.
+export const REPORT_REASONS = [
+  "Información falsa o engañosa",
+  "Suplantación de identidad",
+  "Contenido inapropiado",
+  "Perfil duplicado",
+  "Otro",
+] as const;
+
+export type CampaignAdminOut = Campaign & {
+  athlete_id: string;
+  athlete_slug: string;
+  athlete_full_name: string;
+};
+
+export type ReportOut = {
+  id: string;
+  athlete_id: string;
+  athlete_slug: string;
+  athlete_full_name: string;
+  reason: string;
+  detail: string | null;
+  status: "open" | "resolved";
+  resolved_note: string | null;
+  resolved_at: string | null;
+  created_at: string;
+};
+
 export type Achievement = { title: string; date?: string; description?: string };
 
 export type AthleteProfile = {
@@ -61,6 +95,8 @@ export type AthleteProfile = {
   whatsapp_number: string | null;
   alias: string | null;
   cbu: string | null;
+  raffle_url: string | null;
+  raffle_description: string | null;
   campaigns: Campaign[];
 };
 
@@ -79,6 +115,11 @@ export type ApplicationPayload = {
   bio?: string;
   story?: string;
   evidence_links: string[];
+  // Uploaded via getEvidenceUploadUrl + a direct PUT before submitting.
+  id_document_s3_key: string;
+  id_document_filename?: string;
+  selfie_with_id_s3_key: string;
+  selfie_with_id_filename?: string;
   // Minors hold their own account (contact_email is always the caller's own
   // login) — the guardian is consent-only, captured here, not a separate account.
   guardian_email?: string;
@@ -99,6 +140,7 @@ export type AdminAthleteListItem = {
 };
 
 export type EvidenceFileEntry = {
+  id: string;
   kind: string;
   s3_key: string;
   original_filename: string | null;
@@ -117,12 +159,17 @@ export type AthleteDetail = AthleteProfile & {
   rejection_reason: string | null;
   rejected_at: string | null;
   reapply_available_at: string | null;
+  info_requested_message: string | null;
+  info_requested_at: string | null;
+  suspended_reason: string | null;
+  suspended_at: string | null;
   admin_notes: string | null;
   next_review_due: string | null;
   created_at: string;
   instagram_public: boolean;
   whatsapp_public: boolean;
   alias_public: boolean;
+  raffle_public: boolean;
   evidence: EvidenceFileEntry[];
 };
 
@@ -149,6 +196,9 @@ export type AthleteSelfUpdatePayload = Partial<{
   alias: string;
   cbu: string;
   alias_public: boolean;
+  raffle_url: string;
+  raffle_description: string;
+  raffle_public: boolean;
 }>;
 
 export type CampaignCreatePayload = {
@@ -159,6 +209,21 @@ export type CampaignCreatePayload = {
   breakdown: CampaignBreakdownItem[];
 };
 
+// FastAPI's `detail` is a plain string for a manual HTTPException(...), but
+// for a 422 (Pydantic validation failure) it's an array of error objects
+// instead — passing that straight to `new Error()` stringifies it as
+// "[object Object]" rather than anything readable.
+function errorDetailToMessage(detail: unknown, fallback: string): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => (item && typeof item === "object" && "msg" in item ? String(item.msg) : null))
+      .filter((msg): msg is string => Boolean(msg));
+    if (messages.length > 0) return messages.join("; ");
+  }
+  return fallback;
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
@@ -166,7 +231,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    throw new ApiError(res.status, body?.detail ?? `Request to ${path} failed with ${res.status}`);
+    throw new ApiError(res.status, errorDetailToMessage(body?.detail, `Request to ${path} failed with ${res.status}`));
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -180,16 +245,44 @@ function authedFetch<T>(token: string, path: string, init?: RequestInit): Promis
   });
 }
 
-export function listAthletes(filters?: { sport?: string; province?: string }) {
+export type AthleteFilters = {
+  q?: string;
+  sport?: string;
+  province?: string;
+  verified?: boolean;
+  has_upcoming_competition?: boolean;
+};
+
+export function listAthletes(filters?: AthleteFilters) {
   const params = new URLSearchParams();
+  if (filters?.q) params.set("q", filters.q);
   if (filters?.sport) params.set("sport", filters.sport);
   if (filters?.province) params.set("province", filters.province);
+  if (filters?.verified) params.set("verified", "true");
+  if (filters?.has_upcoming_competition) params.set("has_upcoming_competition", "true");
   const qs = params.toString();
   return apiFetch<AthleteCard[]>(`/athletes${qs ? `?${qs}` : ""}`, { cache: "no-store" });
 }
 
+export type AthleteFacets = { sports: string[]; provinces: string[] };
+
+export function getAthleteFacets() {
+  return apiFetch<AthleteFacets>("/athletes/facets", { cache: "no-store" });
+}
+
 export function getAthlete(slug: string) {
   return apiFetch<AthleteProfile>(`/athletes/${slug}`, { cache: "no-store" });
+}
+
+export function getSports() {
+  return apiFetch<string[]>("/sports", { cache: "no-store" });
+}
+
+export function reportAthlete(slug: string, payload: { reason: string; detail?: string }) {
+  return apiFetch<{ id: string; status: string }>(`/athletes/${slug}/report`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function submitApplication(token: string, payload: ApplicationPayload) {
@@ -197,6 +290,48 @@ export function submitApplication(token: string, payload: ApplicationPayload) {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+// --- Evidence document upload (ID/DNI, etc.) — private, encrypted, admin-only reads ---
+
+type PresignedPost = { url: string; fields: Record<string, string>; s3_key: string };
+
+// A presigned POST (not PUT) — the size cap the backend enforces via S3's
+// content-length-range policy condition only exists on this form. The file
+// must be the last field in the multipart body, per S3's POST policy rules.
+async function postFileToS3(presigned: PresignedPost, file: File, errorMessage: string) {
+  const formData = new FormData();
+  for (const [key, value] of Object.entries(presigned.fields)) formData.append(key, value);
+  formData.append("file", file);
+  const res = await fetch(presigned.url, { method: "POST", body: formData });
+  if (!res.ok) {
+    if (res.status === 400) throw new Error(`${errorMessage} (¿el archivo es demasiado grande?)`);
+    throw new Error(errorMessage);
+  }
+}
+
+export function getEvidenceUploadUrl(token: string, filename: string, contentType: string) {
+  return authedFetch<PresignedPost>(token, "/uploads/evidence-url", {
+    method: "POST",
+    body: JSON.stringify({ filename, content_type: contentType }),
+  });
+}
+
+export async function uploadEvidenceFile(token: string, file: File): Promise<{ s3_key: string; filename: string }> {
+  const presigned = await getEvidenceUploadUrl(token, file.name, file.type);
+  await postFileToS3(presigned, file, "No se pudo subir el archivo");
+  return { s3_key: presigned.s3_key, filename: file.name };
+}
+
+// --- Profile photo upload — public, shown on the athlete's profile ---
+
+export async function uploadProfilePhoto(token: string, file: File): Promise<string> {
+  const presigned = await authedFetch<PresignedPost>(token, "/uploads/photo-url", {
+    method: "POST",
+    body: JSON.stringify({ filename: file.name, content_type: file.type }),
+  });
+  await postFileToS3(presigned, file, "No se pudo subir la foto");
+  return presigned.s3_key;
 }
 
 // --- Local dev only: instant account switching, bypasses email entirely ---
@@ -282,6 +417,40 @@ export function adminAuditLog(token: string, athleteId: string) {
   return authedFetch<AuditLogEntry[]>(token, `/admin/athletes/${athleteId}/audit-log`);
 }
 
+export function adminGetEvidenceDownloadUrl(token: string, athleteId: string, evidenceId: string) {
+  return authedFetch<{ url: string }>(token, `/admin/athletes/${athleteId}/evidence/${evidenceId}/download-url`);
+}
+
+export function adminListExpiringCampaigns(token: string) {
+  return authedFetch<CampaignAdminOut[]>(token, "/admin/campaigns/expiring");
+}
+
+export function adminListReports(token: string, status: "open" | "resolved" = "open") {
+  return authedFetch<ReportOut[]>(token, `/admin/reports?status=${status}`);
+}
+
+export function adminResolveReport(token: string, reportId: string, note: string) {
+  return authedFetch<ReportOut>(token, `/admin/reports/${reportId}/resolve`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
+}
+
+export function adminListSports(token: string) {
+  return authedFetch<SportOption[]>(token, "/admin/sports");
+}
+
+export function adminCreateSport(token: string, name: string) {
+  return authedFetch<SportOption>(token, "/admin/sports", { method: "POST", body: JSON.stringify({ name }) });
+}
+
+export function adminUpdateSport(token: string, sportId: string, active: boolean) {
+  return authedFetch<SportOption>(token, `/admin/sports/${sportId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ active }),
+  });
+}
+
 // --- Self-serve (athlete/guardian) ---
 
 export function getMe(token: string) {
@@ -305,4 +474,11 @@ export function updateMyCampaignRaised(token: string, campaignId: string, raised
 
 export function closeMyCampaign(token: string, campaignId: string) {
   return authedFetch<Campaign>(token, `/me/campaigns/${campaignId}/close`, { method: "POST" });
+}
+
+export function renewMyCampaign(token: string, campaignId: string, event_date: string) {
+  return authedFetch<Campaign>(token, `/me/campaigns/${campaignId}/renew`, {
+    method: "POST",
+    body: JSON.stringify({ event_date }),
+  });
 }

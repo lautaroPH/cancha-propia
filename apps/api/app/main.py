@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import admin, applications, athletes, me
+from app.routers import admin, applications, athletes, me, sports, uploads
 
 app = FastAPI(title="Cancha Propia API", version="0.1.0")
 
@@ -18,6 +18,8 @@ app.include_router(applications.router)
 app.include_router(athletes.router)
 app.include_router(admin.router)
 app.include_router(me.router)
+app.include_router(uploads.router)
+app.include_router(sports.router)
 
 if settings.dev_auth_enabled:
     from app.routers import dev_auth

@@ -6,6 +6,13 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 
+def _is_http_url(value: str) -> bool:
+    # Both evidence_links and raffle_url get rendered as raw <a href> — without
+    # this, a javascript: URI would be a stored XSS on click (public profile
+    # for raffle_url, admin review page for evidence_links).
+    return value.startswith("http://") or value.startswith("https://")
+
+
 class ApplicationCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -30,6 +37,14 @@ class ApplicationCreate(BaseModel):
 
     evidence_links: list[str] = Field(default_factory=list)  # federation/ranking/result URLs submitted at intake
 
+    # Uploaded via POST /uploads/evidence-url beforehand — this just registers
+    # the resulting private S3 keys against the application (plan §4: identity
+    # badge requires national ID + a document + a selfie-with-ID at application time).
+    id_document_s3_key: str = Field(min_length=1)
+    id_document_filename: str | None = None
+    selfie_with_id_s3_key: str = Field(min_length=1)
+    selfie_with_id_filename: str | None = None
+
     # A minor doesn't manage a separate guardian account — this is just the
     # legally necessary bit: who authorized the profile, captured once here.
     guardian_email: EmailStr | None = None
@@ -53,6 +68,8 @@ class ApplicationCreate(BaseModel):
             raise ValueError(
                 "At least one evidence link is required (federation page, ranking, results, social media, etc.)"
             )
+        if any(link.strip() and not _is_http_url(link.strip()) for link in self.evidence_links):
+            raise ValueError("Evidence links must be http:// or https:// URLs")
         return self
 
 
@@ -131,6 +148,8 @@ class AthleteProfile(BaseModel):
     whatsapp_number: str | None
     alias: str | None
     cbu: str | None
+    raffle_url: str | None
+    raffle_description: str | None
 
     campaigns: list[CampaignOut]
 
@@ -149,6 +168,10 @@ class AthleteAdminView(AthleteProfile):
     rejection_reason: str | None
     rejected_at: datetime | None
     reapply_available_at: datetime | None
+    info_requested_message: str | None
+    info_requested_at: datetime | None
+    suspended_reason: str | None
+    suspended_at: datetime | None
     admin_notes: str | None
     next_review_due: date | None
     created_at: datetime
@@ -170,12 +193,30 @@ class AdminAthleteListItem(BaseModel):
 
 
 class EvidenceFileOut(BaseModel):
+    id: uuid.UUID
     kind: str
     s3_key: str
     original_filename: str | None
     uploaded_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class EvidenceUploadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    filename: str = Field(min_length=1)
+    content_type: str = Field(min_length=1)
+
+
+class EvidenceUploadResponse(BaseModel):
+    url: str
+    fields: dict[str, str]
+    s3_key: str
+
+
+class EvidenceDownloadUrl(BaseModel):
+    url: str
 
 
 class AuditLogEntryOut(BaseModel):
@@ -192,6 +233,7 @@ class AthleteAdminDetail(AthleteAdminView):
     instagram_public: bool
     whatsapp_public: bool
     alias_public: bool
+    raffle_public: bool
     evidence: list[EvidenceFileOut]
 
 
@@ -203,6 +245,7 @@ class AthleteSelfView(AthleteAdminView):
     instagram_public: bool
     whatsapp_public: bool
     alias_public: bool
+    raffle_public: bool
     evidence: list[EvidenceFileOut]
 
     model_config = {"from_attributes": False}
@@ -249,6 +292,11 @@ class AthleteSelfUpdate(BaseModel):
     alias: str | None = None
     cbu: str | None = None
     alias_public: bool | None = None
+    # External only — plan explicitly cuts an internal raffle system, this is
+    # just a link-out to wherever the athlete runs their own.
+    raffle_url: str | None = None
+    raffle_description: str | None = None
+    raffle_public: bool | None = None
 
     @model_validator(mode="after")
     def public_toggles_need_a_value(self) -> "AthleteSelfUpdate":
@@ -260,6 +308,10 @@ class AthleteSelfUpdate(BaseModel):
             raise ValueError("whatsapp_number is required to make WhatsApp public")
         if self.alias_public and not self.alias:
             raise ValueError("alias is required to make payment info public")
+        if self.raffle_public and not self.raffle_url:
+            raise ValueError("raffle_url is required to make the raffle public")
+        if self.raffle_url and not _is_http_url(self.raffle_url):
+            raise ValueError("raffle_url must be an http:// or https:// URL")
         return self
 
 
@@ -282,3 +334,80 @@ class CampaignRaisedUpdate(BaseModel):
 
 class CampaignPauseRequest(BaseModel):
     reason: str | None = None
+
+
+class CampaignRenewRequest(BaseModel):
+    event_date: date
+
+    @model_validator(mode="after")
+    def must_be_future(self) -> "CampaignRenewRequest":
+        if self.event_date < date.today():
+            raise ValueError("event_date must be in the future")
+        return self
+
+
+class CampaignAdminOut(CampaignOut):
+    """A campaign plus enough athlete context to act on it from a queue that
+    isn't scoped to one athlete (e.g. the expiry queue)."""
+
+    athlete_id: uuid.UUID
+    athlete_slug: str
+    athlete_full_name: str
+
+
+REPORT_REASONS = (
+    "Información falsa o engañosa",
+    "Suplantación de identidad",
+    "Contenido inapropiado",
+    "Perfil duplicado",
+    "Otro",
+)
+
+
+class ReportCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=80)
+    detail: str | None = Field(default=None, max_length=2000)
+
+
+class ReportCreated(BaseModel):
+    id: uuid.UUID
+    status: str
+
+
+class ReportOut(BaseModel):
+    id: uuid.UUID
+    athlete_id: uuid.UUID
+    athlete_slug: str
+    athlete_full_name: str
+    reason: str
+    detail: str | None
+    status: str
+    resolved_note: str | None
+    resolved_at: datetime | None
+    created_at: datetime
+
+
+class ReportResolveRequest(BaseModel):
+    note: str = Field(min_length=1)
+
+
+class SportOptionOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    active: bool
+
+    model_config = {"from_attributes": True}
+
+
+class SportOptionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=80)
+
+
+class SportOptionUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    active: bool

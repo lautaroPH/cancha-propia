@@ -9,10 +9,11 @@ apps/web/.env*.local
 __pycache__/
 *.pyc
 
-# Env files (never commit real secrets)
+# Env files (never commit real secrets) — every .env variant (.env,
+# .env.production, .env.local, etc.) except the checked-in .env.example templates.
 .env
-apps/api/.env
-apps/web/.env.local
+apps/api/.env*
+!apps/api/.env.example
 
 # OS
 .DS_Store

@@ -1,13 +1,22 @@
-from datetime import date
+from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import exists, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.db import get_db
-from app.models.models import Athlete, Campaign
-from app.schemas.schemas import AthleteCard, AthleteFacets, AthleteProfile
+from app.models.models import Athlete, Campaign, Report
+from app.schemas.schemas import (
+    REPORT_REASONS,
+    AthleteCard,
+    AthleteFacets,
+    AthleteProfile,
+    ReportCreate,
+    ReportCreated,
+)
+from app.services.campaign_lifecycle import run_expiry_sweep
+from app.services.rate_limit import check_rate_limit
 from app.services.s3 import public_url
 
 router = APIRouter(prefix="/athletes", tags=["athletes"])
@@ -52,6 +61,8 @@ def _profile(athlete: Athlete) -> AthleteProfile:
         whatsapp_number=athlete.whatsapp_number if athlete.whatsapp_public else None,
         alias=athlete.alias if athlete.alias_public else None,
         cbu=athlete.cbu if athlete.alias_public else None,
+        raffle_url=athlete.raffle_url if athlete.raffle_public else None,
+        raffle_description=athlete.raffle_description if athlete.raffle_public else None,
         campaigns=visible_campaigns,
     )
 
@@ -67,6 +78,8 @@ async def list_athletes(
     ),
     db: AsyncSession = Depends(get_db),
 ):
+    await run_expiry_sweep(db)
+
     stmt = (
         select(Athlete)
         .where(Athlete.status == "active")
@@ -121,6 +134,8 @@ async def get_facets(db: AsyncSession = Depends(get_db)):
 
 @router.get("/{slug}", response_model=AthleteProfile)
 async def get_athlete(slug: str, db: AsyncSession = Depends(get_db)):
+    await run_expiry_sweep(db)
+
     stmt = (
         select(Athlete)
         .where(Athlete.slug == slug, Athlete.status == "active")
@@ -130,3 +145,28 @@ async def get_athlete(slug: str, db: AsyncSession = Depends(get_db)):
     if athlete is None:
         raise HTTPException(status_code=404, detail="Athlete not found")
     return _profile(athlete)
+
+
+@router.post("/{slug}/report", response_model=ReportCreated, status_code=201)
+async def report_athlete(slug: str, payload: ReportCreate, request: Request, db: AsyncSession = Depends(get_db)):
+    # Unauthenticated by design (anyone should be able to flag a profile) —
+    # which is exactly why it needs its own throttle, unlike every other
+    # write endpoint here that's already gated behind a login.
+    client_ip = request.client.host if request.client else "unknown"
+    if not check_rate_limit(f"report:{client_ip}", max_attempts=5, window=timedelta(hours=1)):
+        raise HTTPException(status_code=429, detail="Too many reports from this address — try again later")
+
+    if payload.reason not in REPORT_REASONS:
+        raise HTTPException(status_code=422, detail=f"reason must be one of: {', '.join(REPORT_REASONS)}")
+
+    athlete = (
+        await db.execute(select(Athlete.id).where(Athlete.slug == slug, Athlete.status == "active"))
+    ).scalar_one_or_none()
+    if athlete is None:
+        raise HTTPException(status_code=404, detail="Athlete not found")
+
+    report = Report(athlete_id=athlete, reason=payload.reason, detail=payload.detail)
+    db.add(report)
+    await db.commit()
+    await db.refresh(report)
+    return ReportCreated(id=report.id, status=report.status)

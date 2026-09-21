@@ -27,10 +27,11 @@ export default async function DashboardPage() {
     pending: "Tu postulación está en revisión.",
     active: "Tu perfil está publicado y visible en la plataforma.",
     rejected: `Tu postulación fue rechazada.${athlete.rejection_reason ? ` Motivo: ${athlete.rejection_reason}` : ""}`,
-    suspended: "Tu perfil está suspendido temporalmente.",
+    suspended: `Tu perfil está suspendido temporalmente.${athlete.suspended_reason ? ` Motivo: ${athlete.suspended_reason}` : ""}`,
   };
 
   const activeCampaign = athlete.campaigns.find((c) => c.status === "active" || c.status === "grace");
+  const expiredCampaign = athlete.campaigns.find((c) => c.status === "expired");
   const draftCampaigns = athlete.campaigns.filter((c) => c.status === "draft");
   const pausedCampaign = athlete.campaigns.find((c) => c.status === "paused");
 
@@ -45,6 +46,19 @@ export default async function DashboardPage() {
         )}
       </div>
       <p className="mt-2 text-sm text-muted-foreground">{statusMessage[athlete.status]}</p>
+
+      {athlete.info_requested_message && (
+        <div className="mt-4 rounded-lg border border-accent bg-accent-soft px-4 py-3">
+          <p className="text-sm font-medium text-accent-strong">Un administrador pidió más información:</p>
+          <p className="mt-1 text-sm text-foreground/90">{athlete.info_requested_message}</p>
+          <Link
+            href="/apply"
+            className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:opacity-90"
+          >
+            Actualizar mi postulación
+          </Link>
+        </div>
+      )}
 
       {athlete.status === "rejected" ? (
         <div className="mt-6 rounded-lg border border-border bg-surface p-4">
@@ -80,8 +94,17 @@ export default async function DashboardPage() {
             <InfoField label="Fecha de nacimiento" value={athlete.date_of_birth} />
           </section>
           <p className="mt-2 text-xs text-muted-foreground">
-            Para cambiar deporte, club, federación o categoría escribinos — esos cambios requieren
-            una nueva revisión, así que no se editan directo desde acá.
+            {athlete.status === "pending" ? (
+              <>
+                ¿Necesitás corregir deporte, DNI, club u otro dato de tu postulación?{" "}
+                <Link href="/apply" className="text-accent hover:underline">
+                  Editá tu postulación
+                </Link>
+                .
+              </>
+            ) : (
+              "Para cambiar deporte, club, federación o categoría escribinos — esos cambios requieren una nueva revisión, así que no se editan directo desde acá."
+            )}
           </p>
 
           <ProfileEditor athlete={athlete} accessToken={session.access_token} />
@@ -89,6 +112,7 @@ export default async function DashboardPage() {
           <CampaignEditor
             accessToken={session.access_token}
             activeCampaign={activeCampaign}
+            expiredCampaign={expiredCampaign}
             draftCampaigns={draftCampaigns}
             pausedCampaign={pausedCampaign}
           />

@@ -5,6 +5,7 @@ import { adminGetAthlete, adminAuditLog, ApiError } from "@/lib/api";
 import { AdminAccessDenied } from "@/components/admin-access-denied";
 import { CampaignApprovals } from "./campaign-approvals";
 import { ReviewActions } from "./review-actions";
+import { ViewEvidenceButton } from "./view-evidence-button";
 
 export default async function AdminAthleteDetailPage(props: PageProps<"/admin/athletes/[id]">) {
   const { id } = await props.params;
@@ -82,15 +83,18 @@ export default async function AdminAthleteDetailPage(props: PageProps<"/admin/at
         <section className="mt-6">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase">Evidencia</h2>
           <ul className="mt-2 space-y-1">
-            {athlete.evidence.map((e, i) => (
-              <li key={i} className="text-sm">
+            {athlete.evidence.map((e) => (
+              <li key={e.id} className="text-sm">
                 <span className="text-muted-foreground">[{e.kind}]</span>{" "}
                 {e.kind === "federation_link" ? (
                   <a href={e.s3_key} target="_blank" rel="noreferrer" className="text-accent hover:underline">
                     {e.s3_key}
                   </a>
                 ) : (
-                  <span className="text-foreground">{e.s3_key}</span>
+                  <>
+                    <span className="text-foreground">{e.original_filename ?? "documento"}</span>{" "}
+                    <ViewEvidenceButton athleteId={athlete.id} evidenceId={e.id} accessToken={session.access_token} />
+                  </>
                 )}
               </li>
             ))}

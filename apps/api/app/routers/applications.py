@@ -10,6 +10,7 @@ from app.core.db import get_db
 from app.core.security import hash_national_id
 from app.models.models import Athlete, EvidenceFile
 from app.schemas.schemas import ApplicationCreate, ApplicationCreated
+from app.services.notifications import notify_application_received
 from app.services.reapplication import reapply_available_at
 
 router = APIRouter(prefix="/applications", tags=["applications"])
@@ -68,18 +69,27 @@ async def submit_application(
         await db.execute(select(Athlete).where(Athlete.auth_user_id == user.auth_user_id))
     ).scalar_one_or_none()
 
-    if existing and existing.status != "rejected":
+    if existing and existing.status not in ("pending", "rejected"):
         raise HTTPException(status_code=409, detail="This account already has an application submitted.")
 
-    if existing:
-        # Rejected — allow resubmission, but only after the cooldown, so a
-        # rejection can't just be immediately resubmitted unchanged.
+    if existing and existing.status == "rejected":
+        # Only a rejection needs the cooldown — a still-pending application
+        # (e.g. after an admin asked for more info) can be edited any time.
         available_at = reapply_available_at(existing)
         if available_at and datetime.now(timezone.utc) < available_at:
             raise HTTPException(
                 status_code=429,
                 detail=f"You can reapply after {available_at.isoformat()}.",
             )
+
+    # The uploaded keys must actually belong to this caller's own upload
+    # session (see POST /uploads/evidence-url) — otherwise anyone could point
+    # an application at someone else's already-uploaded document.
+    own_prefix = f"evidence/{user.auth_user_id}/"
+    if not payload.id_document_s3_key.startswith(own_prefix):
+        raise HTTPException(status_code=422, detail="Invalid id_document_s3_key")
+    if not payload.selfie_with_id_s3_key.startswith(own_prefix):
+        raise HTTPException(status_code=422, detail="Invalid selfie_with_id_s3_key")
 
     id_hash = hash_national_id(payload.national_id)
     dup_stmt = select(Athlete.id).where(Athlete.national_id_hash == id_hash)
@@ -102,13 +112,17 @@ async def submit_application(
         athlete.status = "pending"
         athlete.rejection_reason = None
         athlete.rejected_at = None
+        athlete.info_requested_message = None
+        athlete.info_requested_at = None
         athlete.slug = await _unique_slug(db, payload.full_name, exclude_id=athlete.id)
 
-        # Resubmitting replaces the evidence links rather than appending —
-        # stale links from the rejected attempt shouldn't linger.
+        # Resubmitting replaces the evidence links and identity documents
+        # rather than appending — stale evidence from the rejected attempt
+        # shouldn't linger.
         await db.execute(
             delete(EvidenceFile).where(
-                EvidenceFile.athlete_id == athlete.id, EvidenceFile.kind == "federation_link"
+                EvidenceFile.athlete_id == athlete.id,
+                EvidenceFile.kind.in_(["federation_link", "id_document", "selfie_with_id"]),
             )
         )
     else:
@@ -128,7 +142,26 @@ async def submit_application(
         # an actual S3 key instead. Same column, two meanings by kind.
         db.add(EvidenceFile(athlete_id=athlete.id, kind="federation_link", s3_key=link))
 
+    db.add(
+        EvidenceFile(
+            athlete_id=athlete.id,
+            kind="id_document",
+            s3_key=payload.id_document_s3_key,
+            original_filename=payload.id_document_filename,
+        )
+    )
+    db.add(
+        EvidenceFile(
+            athlete_id=athlete.id,
+            kind="selfie_with_id",
+            s3_key=payload.selfie_with_id_s3_key,
+            original_filename=payload.selfie_with_id_filename,
+        )
+    )
+
     await db.commit()
     await db.refresh(athlete)
+
+    notify_application_received(athlete)
 
     return ApplicationCreated(id=athlete.id, slug=athlete.slug, status=athlete.status)

@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { submitApplication, getMe, ApiError, type AthleteDetail } from "@/lib/api";
+import { submitApplication, uploadEvidenceFile, getMe, getSports, ApiError, type AthleteDetail } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
-import { PROVINCES, SPORTS } from "@/lib/constants";
+import { PROVINCES } from "@/lib/constants";
 
 function isMinor(dateOfBirth: string): boolean {
   if (!dateOfBirth) return false;
@@ -29,6 +29,21 @@ export default function ApplyPage() {
   const [previous, setPrevious] = useState<AthleteDetail | null>(null);
   const minor = useMemo(() => isMinor(dateOfBirth), [dateOfBirth]);
 
+  const [idDocument, setIdDocument] = useState<{ s3_key: string; filename: string } | null>(null);
+  const [idDocumentStatus, setIdDocumentStatus] = useState<"idle" | "uploading" | "error">("idle");
+  const [idDocumentError, setIdDocumentError] = useState("");
+
+  const [selfieWithId, setSelfieWithId] = useState<{ s3_key: string; filename: string } | null>(null);
+  const [selfieStatus, setSelfieStatus] = useState<"idle" | "uploading" | "error">("idle");
+  const [selfieError, setSelfieError] = useState("");
+
+  const [sports, setSports] = useState<string[]>([]);
+  useEffect(() => {
+    getSports()
+      .then(setSports)
+      .catch(() => setSports([]));
+  }, []);
+
   // Applying requires being logged in — that's what lets us link the
   // application to your account directly (auth_user_id) instead of guessing
   // from a typed email. Also blocks applying twice, with one exception: a
@@ -46,13 +61,16 @@ export default function ApplyPage() {
 
       try {
         const athlete = await getMe(session.access_token);
-        if (athlete.status === "rejected") {
-          setReapplyAvailableAt(athlete.reapply_available_at);
+        if (athlete.status === "rejected" || athlete.status === "pending") {
+          // Rejected: resubmitting after the cooldown. Pending: still under
+          // review, but editable any time — e.g. after an admin asks for more
+          // info, or the applicant just spots their own mistake.
+          if (athlete.status === "rejected") setReapplyAvailableAt(athlete.reapply_available_at);
           setPrevious(athlete);
           setDateOfBirth(athlete.date_of_birth);
           setStatus("idle");
         } else {
-          // pending/active/suspended — already has a live application.
+          // active/suspended — nothing to edit here, re-review requests go elsewhere.
           router.replace("/dashboard");
         }
       } catch (err) {
@@ -68,8 +86,54 @@ export default function ApplyPage() {
     });
   }, [router]);
 
+  async function handleIdDocumentChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIdDocumentStatus("uploading");
+    setIdDocumentError("");
+    try {
+      const uploaded = await uploadEvidenceFile(accessToken, file);
+      setIdDocument(uploaded);
+      setIdDocumentStatus("idle");
+    } catch (err) {
+      setIdDocument(null);
+      setIdDocumentStatus("error");
+      setIdDocumentError(err instanceof Error ? err.message : "No se pudo subir el archivo");
+    }
+  }
+
+  async function handleSelfieChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSelfieStatus("uploading");
+    setSelfieError("");
+    try {
+      const uploaded = await uploadEvidenceFile(accessToken, file);
+      setSelfieWithId(uploaded);
+      setSelfieStatus("idle");
+    } catch (err) {
+      setSelfieWithId(null);
+      setSelfieStatus("error");
+      setSelfieError(err instanceof Error ? err.message : "No se pudo subir el archivo");
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (!idDocument) {
+      setStatus("error");
+      setErrorMessage("Subí una foto de tu DNI antes de enviar la postulación.");
+      return;
+    }
+    if (!selfieWithId) {
+      setStatus("error");
+      setErrorMessage("Subí una selfie con tu DNI antes de enviar la postulación.");
+      return;
+    }
+
     setStatus("submitting");
     setErrorMessage("");
 
@@ -94,6 +158,10 @@ export default function ApplyPage() {
           .split("\n")
           .map((l) => l.trim())
           .filter(Boolean),
+        id_document_s3_key: idDocument.s3_key,
+        id_document_filename: idDocument.filename,
+        selfie_with_id_s3_key: selfieWithId.s3_key,
+        selfie_with_id_filename: selfieWithId.filename,
         guardian_email: minor ? String(form.get("guardian_email")) : undefined,
         guardian_consent: minor ? form.get("guardian_consent") === "on" : undefined,
       });
@@ -152,6 +220,13 @@ export default function ApplyPage() {
         </p>
       )}
 
+      {previous?.status === "pending" && previous.info_requested_message && (
+        <div className="mt-4 rounded-lg border border-accent bg-accent-soft px-3 py-2">
+          <p className="text-sm font-medium text-accent-strong">Un administrador pidió más información:</p>
+          <p className="mt-1 text-sm text-foreground/90">{previous.info_requested_message}</p>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="mt-8 space-y-5">
         <Field
           label="Nombre completo"
@@ -177,8 +252,54 @@ export default function ApplyPage() {
           </p>
         )}
 
+        <label className="block">
+          <span className="text-sm font-medium text-foreground/90">Foto de tu DNI (frente)</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,application/pdf"
+            onChange={handleIdDocumentChange}
+            className="mt-1 block w-full text-sm text-foreground file:mr-3 file:rounded-lg file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground hover:file:bg-surface-muted"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Es privado — solo lo ve el equipo que revisa tu identidad, nunca se publica en tu perfil.
+          </p>
+          {idDocumentStatus === "uploading" && <p className="mt-1 text-xs text-accent">Subiendo...</p>}
+          {idDocumentStatus === "error" && <p className="mt-1 text-xs text-danger">{idDocumentError}</p>}
+          {idDocument && idDocumentStatus === "idle" && (
+            <p className="mt-1 text-xs text-verified">✓ {idDocument.filename} cargado</p>
+          )}
+          {previous?.evidence.some((e) => e.kind === "id_document") && !idDocument && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Ya habías subido un documento — subí uno de nuevo para reemplazarlo.
+            </p>
+          )}
+        </label>
+
+        <label className="block">
+          <span className="text-sm font-medium text-foreground/90">Selfie sosteniendo tu DNI</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handleSelfieChange}
+            className="mt-1 block w-full text-sm text-foreground file:mr-3 file:rounded-lg file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground hover:file:bg-surface-muted"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Una foto tuya con el DNI al lado de tu cara, bien visible. También privada.
+          </p>
+          {selfieStatus === "uploading" && <p className="mt-1 text-xs text-accent">Subiendo...</p>}
+          {selfieStatus === "error" && <p className="mt-1 text-xs text-danger">{selfieError}</p>}
+          {selfieWithId && selfieStatus === "idle" && (
+            <p className="mt-1 text-xs text-verified">✓ {selfieWithId.filename} cargado</p>
+          )}
+          {previous?.evidence.some((e) => e.kind === "selfie_with_id") && !selfieWithId && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Ya habías subido una selfie — subí una de nuevo para reemplazarla.
+            </p>
+          )}
+        </label>
+
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Deporte" name="sport" placeholder="Judo" list={SPORTS} defaultValue={previous?.sport} required />
+          <Field label="Deporte" name="sport" placeholder="Judo" list={sports} defaultValue={previous?.sport} required />
           <Field
             label="Categoría"
             name="category"

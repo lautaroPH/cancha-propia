@@ -1,6 +1,7 @@
-"""Wipes ALL application data (athletes, campaigns, guardians, admins, audit
-log, reports). Does NOT touch Supabase's own auth.users — accounts you've
-logged in with stay valid, just unlinked from any athlete/admin row.
+"""Wipes ALL application data (athletes, campaigns, admins, audit log,
+reports, sport suggestions). Does NOT touch Supabase's own auth.users —
+accounts you've logged in with stay valid, just unlinked from any
+athlete/admin row.
 
 Usage: python -m app.reset_db --yes
 """
@@ -12,6 +13,8 @@ from sqlalchemy import text
 
 from app.core.db import async_session
 
+# No standalone `guardian` table since migration 0005 — a minor's guardian is
+# just two columns on `athlete` (see models.Athlete), not a separate account.
 TABLES = [
     "admin_audit_log",
     "evidence_file",
@@ -19,8 +22,8 @@ TABLES = [
     "campaign",
     "report",
     "athlete",
-    "guardian",
     "admin_user",
+    "sport_option",
 ]
 
 

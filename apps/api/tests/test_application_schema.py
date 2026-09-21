@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.core.security import hash_national_id
-from app.schemas.schemas import ApplicationCreate
+from app.schemas.schemas import AthleteSelfUpdate, ApplicationCreate
 
 
 def _base_payload(**overrides):
@@ -14,6 +14,8 @@ def _base_payload(**overrides):
         national_id="30111222",
         sport="Judo",
         evidence_links=["https://example.com/ranking"],
+        id_document_s3_key="evidence/11111111-1111-1111-1111-111111111111/abc.jpg",
+        selfie_with_id_s3_key="evidence/11111111-1111-1111-1111-111111111111/def.jpg",
     )
     payload.update(overrides)
     return payload
@@ -60,6 +62,27 @@ def test_application_requires_at_least_one_evidence_link():
 def test_application_rejects_blank_only_evidence_links():
     with pytest.raises(ValidationError, match="evidence link is required"):
         ApplicationCreate(**_base_payload(date_of_birth=_years_ago(20), evidence_links=["   "]))
+
+
+def test_application_rejects_javascript_uri_evidence_link():
+    # Rendered as a raw <a href> on the admin review page — a javascript:
+    # URI there would be a stored XSS against whichever admin clicks it.
+    with pytest.raises(ValidationError, match="http"):
+        ApplicationCreate(
+            **_base_payload(date_of_birth=_years_ago(20), evidence_links=["javascript:alert(1)"])
+        )
+
+
+def test_raffle_url_rejects_javascript_uri():
+    # Same as above, but rendered on the athlete's public profile — any
+    # visitor who clicks "Ver sorteo" would trigger it.
+    with pytest.raises(ValidationError, match="http"):
+        AthleteSelfUpdate(raffle_url="javascript:alert(document.cookie)")
+
+
+def test_raffle_url_accepts_http_url():
+    update = AthleteSelfUpdate(raffle_url="https://instagram.com/p/example")
+    assert update.raffle_url == "https://instagram.com/p/example"
 
 
 def test_national_id_hash_is_stable_and_ignores_formatting():

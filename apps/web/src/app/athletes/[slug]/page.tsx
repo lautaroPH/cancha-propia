@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getAthlete } from "@/lib/api";
+import { ReportButton } from "./report-button";
 
 async function loadAthlete(slug: string) {
   try {
@@ -30,14 +31,12 @@ export async function generateMetadata(props: PageProps<"/athletes/[slug]">): Pr
     openGraph: {
       title: athlete.full_name,
       description,
-      images: athlete.photo_url ? [{ url: athlete.photo_url, width: 1200, height: 630 }] : [],
       type: "profile",
     },
     twitter: {
       card: "summary_large_image",
       title: athlete.full_name,
       description,
-      images: athlete.photo_url ? [athlete.photo_url] : [],
     },
   };
 }
@@ -159,7 +158,7 @@ export default async function AthleteProfilePage(props: PageProps<"/athletes/[sl
         </section>
       )}
 
-      {(athlete.alias || athlete.instagram_handle || athlete.whatsapp_number) && (
+      {(athlete.alias || athlete.instagram_handle || athlete.whatsapp_number || athlete.raffle_url) && (
         <section className="mt-10">
           <h2 className="text-lg font-semibold text-foreground">¿Cómo podés ayudar?</h2>
           <div className="mt-3 space-y-3">
@@ -172,6 +171,26 @@ export default async function AthleteProfilePage(props: PageProps<"/athletes/[sl
                 )}
                 <p className="mt-2 text-xs text-muted-foreground">
                   La plataforma no procesa ni retiene este dinero — la transferencia va directo al atleta.
+                </p>
+              </div>
+            )}
+            {athlete.raffle_url && (
+              <div className="rounded-lg border border-border bg-surface p-4">
+                <p className="text-sm text-muted-foreground">Participá de su sorteo</p>
+                {athlete.raffle_description && (
+                  <p className="mt-1 text-foreground/90">{athlete.raffle_description}</p>
+                )}
+                <a
+                  href={athlete.raffle_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-block font-medium text-accent hover:underline"
+                >
+                  Ver sorteo →
+                </a>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  El sorteo lo organiza y gestiona {athlete.full_name.split(" ")[0]} de forma externa — la
+                  plataforma no participa, no vende números ni administra el sorteo.
                 </p>
               </div>
             )}
@@ -200,6 +219,10 @@ export default async function AthleteProfilePage(props: PageProps<"/athletes/[sl
           </div>
         </section>
       )}
+
+      <footer className="mt-14 border-t border-border pt-6">
+        <ReportButton slug={athlete.slug} />
+      </footer>
     </div>
   );
 }

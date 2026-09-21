@@ -38,6 +38,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               Cancha Propia
             </Link>
             <div className="flex items-center gap-4">
+              <Link href="/athletes" className="text-sm font-medium text-foreground hover:text-accent">
+                Atletas
+              </Link>
               <AuthNav />
               <ThemeToggle />
             </div>

@@ -12,8 +12,10 @@ from app.schemas.schemas import (
     CampaignCreate,
     CampaignOut,
     CampaignRaisedUpdate,
+    CampaignRenewRequest,
     EvidenceFileOut,
 )
+from app.services.campaign_lifecycle import run_expiry_sweep
 from app.services.reapplication import reapply_available_at
 from app.services.s3 import public_url
 
@@ -51,12 +53,19 @@ def _self_view(athlete: Athlete, evidence: list[EvidenceFile]) -> AthleteSelfVie
         alias=athlete.alias,
         cbu=athlete.cbu,
         alias_public=athlete.alias_public,
+        raffle_url=athlete.raffle_url,
+        raffle_description=athlete.raffle_description,
+        raffle_public=athlete.raffle_public,
         contact_email=athlete.contact_email,
         guardian_email=athlete.guardian_email,
         guardian_consent_at=athlete.guardian_consent_at,
         rejection_reason=athlete.rejection_reason,
         rejected_at=athlete.rejected_at,
         reapply_available_at=reapply_available_at(athlete),
+        info_requested_message=athlete.info_requested_message,
+        info_requested_at=athlete.info_requested_at,
+        suspended_reason=athlete.suspended_reason,
+        suspended_at=athlete.suspended_at,
         admin_notes=None,
         created_at=athlete.created_at,
         campaigns=[CampaignOut.model_validate(c) for c in athlete.campaigns],
@@ -84,6 +93,7 @@ async def get_my_profile(
     athlete: Athlete = Depends(get_current_athlete),
     db: AsyncSession = Depends(get_db),
 ):
+    await run_expiry_sweep(db)
     athlete = await _reload_with_campaigns(db, athlete.id)
     evidence = await _load_evidence(db, athlete.id)
     return _self_view(athlete, evidence)
@@ -95,6 +105,13 @@ async def update_my_profile(
     athlete: Athlete = Depends(get_current_athlete),
     db: AsyncSession = Depends(get_db),
 ):
+    # Must be a key this athlete's own upload actually produced (see
+    # POST /uploads/photo-url) — otherwise nothing stops pointing photo_s3_key
+    # at an arbitrary external URL (third-party tracking on every profile
+    # view) or another athlete's real photo key.
+    if payload.photo_s3_key is not None and not payload.photo_s3_key.startswith(f"photos/{athlete.id}/"):
+        raise HTTPException(status_code=422, detail="Invalid photo_s3_key")
+
     # mode="json" so achievement dates serialize to strings before landing in
     # the JSONB column, instead of raw `date` objects the driver can't encode.
     for field, value in payload.model_dump(exclude_unset=True, mode="json").items():
@@ -173,6 +190,27 @@ async def close_my_campaign(
 ):
     campaign = await _load_my_campaign(db, athlete.id, campaign_id)
     campaign.status = "closed"
+    await db.commit()
+    await db.refresh(campaign)
+    return campaign
+
+
+@router.post("/campaigns/{campaign_id}/renew", response_model=CampaignOut)
+async def renew_my_campaign(
+    campaign_id,
+    payload: CampaignRenewRequest,
+    athlete: Athlete = Depends(get_current_athlete),
+    db: AsyncSession = Depends(get_db),
+):
+    # A campaign that missed its event just needs a new date to keep going —
+    # unlike a brand-new campaign, this doesn't re-open admin review (plan §2).
+    campaign = await _load_my_campaign(db, athlete.id, campaign_id)
+    if campaign.status not in ("grace", "expired"):
+        raise HTTPException(status_code=409, detail="Only a campaign in grace or expired can be renewed")
+
+    campaign.event_date = payload.event_date
+    campaign.status = "active"
+    campaign.grace_started_at = None
     await db.commit()
     await db.refresh(campaign)
     return campaign

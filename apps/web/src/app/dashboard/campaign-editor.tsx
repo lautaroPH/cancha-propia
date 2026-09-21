@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   closeMyCampaign,
   createMyCampaign,
+  renewMyCampaign,
   updateMyCampaignRaised,
   type CampaignBreakdownItem,
   type Campaign,
@@ -17,11 +18,13 @@ function money(n: number) {
 export function CampaignEditor({
   accessToken,
   activeCampaign,
+  expiredCampaign,
   draftCampaigns,
   pausedCampaign,
 }: {
   accessToken: string;
   activeCampaign?: Campaign;
+  expiredCampaign?: Campaign;
   draftCampaigns: Campaign[];
   pausedCampaign?: Campaign;
 }) {
@@ -51,6 +54,16 @@ export function CampaignEditor({
         <div className="rounded-lg border border-accent-soft bg-accent-soft/40 p-4">
           <p className="font-medium text-foreground">{activeCampaign.title}</p>
           <p className="text-sm text-muted-foreground">Meta: {money(activeCampaign.goal_amount_ars)}</p>
+
+          {activeCampaign.status === "grace" && (
+            <div className="mt-3 rounded-lg border border-accent bg-background p-3">
+              <p className="text-sm text-foreground">
+                La fecha de tu competencia ya pasó. Cerrá la campaña o actualizá la fecha para seguir mostrándola.
+              </p>
+              <RenewForm campaignId={activeCampaign.id} accessToken={accessToken} busy={busy} run={run} />
+            </div>
+          )}
+
           <RaisedForm
             campaignId={activeCampaign.id}
             current={activeCampaign.raised_amount_ars}
@@ -71,6 +84,22 @@ export function CampaignEditor({
           <p className="font-medium text-foreground">{pausedCampaign.title}</p>
           <p className="mt-1">Un administrador pausó esta campaña temporalmente. Contactanos si tenés dudas.</p>
         </div>
+      ) : expiredCampaign ? (
+        <div className="rounded-lg border border-danger bg-danger-soft/40 p-4">
+          <p className="font-medium text-foreground">{expiredCampaign.title}</p>
+          <p className="mt-1 text-sm text-foreground">
+            Esta campaña venció y ya no se muestra en tu perfil público. Actualizá la fecha si la competencia se
+            reprogramó, o cerrala si ya no aplica.
+          </p>
+          <RenewForm campaignId={expiredCampaign.id} accessToken={accessToken} busy={busy} run={run} />
+          <button
+            disabled={busy}
+            onClick={() => run(() => closeMyCampaign(accessToken, expiredCampaign.id))}
+            className="mt-3 text-sm font-medium text-muted-foreground hover:text-danger disabled:opacity-50"
+          >
+            Cerrar campaña
+          </button>
+        </div>
       ) : draftCampaigns.length > 0 ? (
         <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
           Tenés {draftCampaigns.length} campaña(s) esperando aprobación del administrador:{" "}
@@ -80,6 +109,38 @@ export function CampaignEditor({
         <NewCampaignForm accessToken={accessToken} busy={busy} run={run} />
       )}
     </section>
+  );
+}
+
+function RenewForm({
+  campaignId,
+  accessToken,
+  busy,
+  run,
+}: {
+  campaignId: string;
+  accessToken: string;
+  busy: boolean;
+  run: (action: () => Promise<unknown>) => Promise<void>;
+}) {
+  const [eventDate, setEventDate] = useState("");
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <input
+        type="date"
+        value={eventDate}
+        onChange={(e) => setEventDate(e.target.value)}
+        className="rounded-lg border border-border bg-surface px-2 py-1 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+      />
+      <button
+        disabled={busy || !eventDate}
+        onClick={() => run(() => renewMyCampaign(accessToken, campaignId, eventDate))}
+        className="rounded-lg bg-accent px-3 py-1 text-sm font-medium text-accent-foreground hover:opacity-90 disabled:opacity-50"
+      >
+        Actualizar fecha
+      </button>
+    </div>
   );
 }
 

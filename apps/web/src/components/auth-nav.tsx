@@ -15,6 +15,18 @@ export function AuthNav() {
   const [displayName, setDisplayName] = useState<string | null | undefined>(undefined);
   const [hasApplication, setHasApplication] = useState<boolean | undefined>(undefined);
   const [isAdmin, setIsAdmin] = useState<boolean | undefined>(undefined);
+  // Tracks which account the three fields above were fetched for, so switching
+  // straight from one logged-in account to another (no sign-out in between —
+  // e.g. the dev quick-switch) doesn't flash the previous account's values
+  // while the new fetch is in flight. Resetting here, during render, is the
+  // React-documented way to do this — not from inside the fetch effect below.
+  const [fetchedForToken, setFetchedForToken] = useState<string | undefined>(undefined);
+  if (session && session.token !== fetchedForToken) {
+    setFetchedForToken(session.token);
+    setDisplayName(undefined);
+    setHasApplication(undefined);
+    setIsAdmin(undefined);
+  }
 
   useEffect(() => {
     const supabase = createClient();
@@ -31,12 +43,7 @@ export function AuthNav() {
   }, []);
 
   useEffect(() => {
-    if (!session) {
-      setDisplayName(session === null ? null : undefined);
-      setHasApplication(session === null ? false : undefined);
-      setIsAdmin(session === null ? false : undefined);
-      return;
-    }
+    if (!session) return;
 
     getMe(session.token)
       .then((athlete) => {
