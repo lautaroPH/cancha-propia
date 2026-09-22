@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.routers import admin, applications, athletes, me, sports, uploads
 
-app = FastAPI(title="Cancha Propia API", version="0.1.0")
+app = FastAPI(title="Codeportistas API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,

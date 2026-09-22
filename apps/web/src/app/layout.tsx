@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cancha Propia",
+  title: "Codeportistas",
   description: "Descubrí y apoyá a los atletas argentinos que necesitan una mano para competir.",
 };
 
@@ -35,7 +35,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <nav className="border-b border-border">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
             <Link href="/" className="font-bold text-foreground">
-              Cancha Propia
+              Codeportistas
             </Link>
             <div className="flex items-center gap-4">
               <Link href="/athletes" className="text-sm font-medium text-foreground hover:text-accent">

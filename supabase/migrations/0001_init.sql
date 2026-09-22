@@ -1,4 +1,4 @@
--- Cancha Propia — initial schema
+-- Codeportistas — initial schema
 -- Source of truth for the data model. FastAPI connects with the Supabase
 -- service-role/direct connection string and enforces all access rules in
 -- application code, so this file intentionally does not define RLS policies:

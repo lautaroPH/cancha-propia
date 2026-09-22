@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { getAthlete } from "@/lib/api";
 
-export const alt = "Perfil de atleta en Cancha Propia";
+export const alt = "Perfil de atleta en Codeportistas";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -53,7 +53,7 @@ export default async function Image(props: { params: Promise<{ slug: string }> }
             fontWeight: 700,
           }}
         >
-          Cancha Propia
+          Codeportistas
         </div>
       ),
       size
@@ -109,7 +109,7 @@ export default async function Image(props: { params: Promise<{ slug: string }> }
 
         <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", marginLeft: 56, flex: 1 }}>
           <div style={{ display: "flex", fontSize: 28, fontWeight: 700, letterSpacing: 2, color: COLORS.accent }}>
-            CANCHA PROPIA
+            CODEPORTISTAS
           </div>
           <div style={{ display: "flex", fontSize: 60, fontWeight: 700, color: COLORS.foreground, marginTop: 14 }}>
             {athlete.full_name}

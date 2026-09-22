@@ -1,4 +1,4 @@
-# Cancha Propia
+# Codeportistas
 
 Discovery and trust platform for Argentine high-performance athletes. See the
 [product plan](https://claude.ai/code/artifact/9924618e-4080-42f6-946a-68f825e99634) for the

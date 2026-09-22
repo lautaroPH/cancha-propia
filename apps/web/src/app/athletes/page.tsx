@@ -44,7 +44,7 @@ export default async function DirectoryPage(props: PageProps<"/athletes">) {
   return (
     <div className="mx-auto max-w-5xl px-6 py-12">
       <header className="mb-8">
-        <p className="text-sm font-semibold tracking-wide text-accent uppercase">Cancha Propia</p>
+        <p className="text-sm font-semibold tracking-wide text-accent uppercase">Codeportistas</p>
         <h1 className="mt-2 text-3xl font-bold text-foreground">
           Descubrí a los atletas que representan a la Argentina
         </h1>

@@ -45,7 +45,7 @@ def _layout(heading: str, body_html: str, cta_label: str | None = None, cta_href
               <td style="padding:36px 36px 32px;font-family:{_FONT};">
                 <p style="color:{_ACCENT};font-size:12px;font-weight:700;letter-spacing:.1em;
                           text-transform:uppercase;margin:0 0 20px;">
-                  Cancha Propia
+                  Codeportistas
                 </p>
                 <h1 style="color:{_INK};font-size:21px;font-weight:700;margin:0 0 16px;line-height:1.3;">
                   {heading}
@@ -57,7 +57,7 @@ def _layout(heading: str, body_html: str, cta_label: str | None = None, cta_href
             <tr>
               <td style="padding:20px 36px;border-top:1px solid {_BORDER};font-family:{_FONT};">
                 <p style="color:{_MUTED};font-size:12px;line-height:1.5;margin:0;">
-                  Cancha Propia — descubrimiento y confianza para atletas argentinos. La plataforma nunca
+                  Codeportistas — descubrimiento y confianza para atletas argentinos. La plataforma nunca
                   procesa ni retiene transferencias; los aportes van directo al atleta.
                 </p>
               </td>

@@ -37,13 +37,13 @@ export default function LandingPage() {
     <div>
       <section className="border-b border-border bg-surface">
         <div className="mx-auto max-w-5xl px-6 py-16 sm:py-20">
-          <p className="text-sm font-semibold tracking-wide text-accent uppercase">Cancha Propia</p>
+          <p className="text-sm font-semibold tracking-wide text-accent uppercase">Codeportistas</p>
           <h1 className="mt-3 max-w-2xl text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
             Encontrá y apoyá a atletas argentinos que necesitan una mano para competir
           </h1>
           <p className="mt-5 max-w-2xl text-lg text-muted-foreground">
             Muchos deportistas de alto rendimiento financian viajes, equipamiento e inscripciones a
-            competencias con sus propios medios. Cancha Propia reúne sus perfiles verificados en un solo
+            competencias con sus propios medios. Codeportistas reúne sus perfiles verificados en un solo
             lugar para que cualquiera pueda conocer su historia y decidir ayudarlos — directo, sin
             intermediarios.
           </p>
@@ -97,7 +97,7 @@ export default function LandingPage() {
           <StepCard
             number="2"
             title="Revisá su verificación"
-            description="Cada perfil muestra qué datos confirmó el equipo de Cancha Propia: identidad, trayectoria deportiva y participación en competencias."
+            description="Cada perfil muestra qué datos confirmó el equipo de Codeportistas: identidad, trayectoria deportiva y participación en competencias."
           />
           <StepCard
             number="3"
@@ -111,7 +111,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-5xl px-6 py-16">
           <h2 className="text-2xl font-bold text-foreground">Nunca tocamos el dinero</h2>
           <p className="mt-3 max-w-2xl text-muted-foreground">
-            Cancha Propia es una plataforma de descubrimiento y confianza, no una billetera ni un
+            Codeportistas es una plataforma de descubrimiento y confianza, no una billetera ni un
             procesador de pagos. No recibimos, retenemos ni transferimos fondos. Cuando decidís apoyar a
             un atleta, la transferencia va directo de tu cuenta a la de él o ella, por los medios que el
             propio atleta publica en su perfil (alias, CBU). Nuestro trabajo es ayudarte a encontrar

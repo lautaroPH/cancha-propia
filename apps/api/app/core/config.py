@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_password: str = ""
-    email_from: str = "Cancha Propia <atletasarg.mail@gmail.com>"
+    email_from: str = "Codeportistas <atletasarg.mail@gmail.com>"
 
     # How long a rejected applicant must wait before resubmitting — a cheap
     # brake on rapid-fire resubmission without addressing admin feedback.
