@@ -90,14 +90,15 @@ export function AuthNav() {
 
   return (
     <div className="flex items-center gap-3 text-sm sm:gap-5">
-      {hasApplication === false && (
+      {/* Admins review profiles; they don't need a nudge to create one. */}
+      {hasApplication === false && isAdmin === false && (
         <Link href="/apply" className="btn btn-sm bg-ink whitespace-nowrap text-on-ink hover:opacity-90">
           Crear perfil
         </Link>
       )}
       <Link
         href="/dashboard"
-        className={`max-w-20 truncate font-semibold hover:underline sm:inline sm:max-w-32 ${hasApplication === false ? "hidden" : ""}`}
+        className={`max-w-20 truncate font-semibold hover:underline sm:inline sm:max-w-32 ${hasApplication === false && isAdmin === false ? "hidden" : ""}`}
       >
         {displayName ?? "Mi cuenta"}
       </Link>

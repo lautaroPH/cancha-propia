@@ -4,6 +4,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { adminApprove, adminReactivate, adminReject, adminRequestInfo, adminSuspend } from "@/lib/api";
 
+type Decision = "approve" | "info" | "reject";
+
+const DECISIONS: { id: Decision; label: string }[] = [
+  { id: "approve", label: "Aprobar" },
+  { id: "info", label: "Pedir info" },
+  { id: "reject", label: "Rechazar" },
+];
+
 export function ReviewActions({
   athleteId,
   accessToken,
@@ -16,6 +24,9 @@ export function ReviewActions({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // One decision at a time — three stacked forms made it easy to type a
+  // rejection reason and hit the wrong button.
+  const [decision, setDecision] = useState<Decision>("approve");
 
   const [identityVerified, setIdentityVerified] = useState(false);
   const [careerVerified, setCareerVerified] = useState(false);
@@ -40,109 +51,144 @@ export function ReviewActions({
   }
 
   return (
-    <section className="mt-10 space-y-6 border-t border-border pt-6">
-      <h2 className="group-title text-[1.125rem]">Acciones</h2>
-      {error && <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
+    <section className="rounded-xl border border-border bg-surface p-5">
+      <h2 className="group-title">Decisión</h2>
+      {error && <p className="mt-3 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
       {status === "pending" && (
         <>
-          <div className="rounded-lg border border-verified-soft bg-verified-soft/40 p-4">
-            <p className="text-sm font-semibold text-foreground">Aprobar</p>
-            <div className="mt-2 flex flex-wrap gap-4 text-sm">
-              <label className="flex items-center gap-1.5">
-                <input type="checkbox" checked={identityVerified} onChange={(e) => setIdentityVerified(e.target.checked)} />
-                Identidad
-              </label>
-              <label className="flex items-center gap-1.5">
-                <input type="checkbox" checked={careerVerified} onChange={(e) => setCareerVerified(e.target.checked)} />
-                Trayectoria
-              </label>
-              <label className="flex items-center gap-1.5">
-                <input
-                  type="checkbox"
-                  checked={competitionVerified}
-                  onChange={(e) => setCompetitionVerified(e.target.checked)}
-                />
-                Competencia
-              </label>
+          <div role="tablist" aria-label="Decisión" className="mt-4 grid grid-cols-3 gap-1 rounded-lg bg-surface-muted p-1">
+            {DECISIONS.map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                role="tab"
+                aria-selected={decision === d.id}
+                onClick={() => setDecision(d.id)}
+                className={`rounded-md px-2 py-1.5 text-sm font-semibold transition-colors ${
+                  decision === d.id ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+
+          {decision === "approve" && (
+            <div className="mt-5 space-y-4">
+              <fieldset>
+                <legend className="field-label">Sellos que confirmaste</legend>
+                <div className="mt-2 space-y-2.5 text-sm">
+                  <Seal
+                    label="Identidad"
+                    hint="Su Instagram o sus links muestran que es quien dice ser."
+                    checked={identityVerified}
+                    onChange={setIdentityVerified}
+                  />
+                  <Seal
+                    label="Trayectoria"
+                    hint="Confirmaste su club, federación o disciplina."
+                    checked={careerVerified}
+                    onChange={setCareerVerified}
+                  />
+                  <Seal
+                    label="Competencia"
+                    hint="Compite o fue convocado/a a lo que menciona."
+                    checked={competitionVerified}
+                    onChange={setCompetitionVerified}
+                  />
+                </div>
+              </fieldset>
+              <textarea
+                aria-label="Notas internas"
+                placeholder="Notas internas (opcional, el atleta no las ve)"
+                value={approveNotes}
+                onChange={(e) => setApproveNotes(e.target.value)}
+                rows={2}
+                className="input input-sm"
+              />
+              <button
+                disabled={busy}
+                onClick={() =>
+                  run(() =>
+                    adminApprove(accessToken, athleteId, {
+                      identity_verified: identityVerified,
+                      career_verified: careerVerified,
+                      competition_verified: competitionVerified,
+                      notes: approveNotes || undefined,
+                    })
+                  )
+                }
+                className="btn btn-verified w-full"
+              >
+                {busy ? "Publicando..." : "Aprobar y publicar"}
+              </button>
             </div>
-            <textarea
-              placeholder="Notas internas (opcional)"
-              value={approveNotes}
-              onChange={(e) => setApproveNotes(e.target.value)}
-              rows={2}
-              className="input input-sm mt-2 w-full"
-            />
-            <button
-              disabled={busy}
-              onClick={() =>
-                run(() =>
-                  adminApprove(accessToken, athleteId, {
-                    identity_verified: identityVerified,
-                    career_verified: careerVerified,
-                    competition_verified: competitionVerified,
-                    notes: approveNotes || undefined,
-                  })
-                )
-              }
-              className="mt-3 btn btn-verified btn-sm"
-            >
-              Aprobar y publicar
-            </button>
-          </div>
+          )}
 
-          <div>
-            <p className="text-sm font-semibold text-foreground">Rechazar</p>
-            <textarea
-              placeholder="Motivo del rechazo"
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              rows={2}
-              className="input input-sm mt-2 w-full"
-            />
-            <button
-              disabled={busy || !rejectReason}
-              onClick={() => run(() => adminReject(accessToken, athleteId, rejectReason))}
-              className="mt-2 btn btn-danger btn-sm"
-            >
-              Rechazar
-            </button>
-          </div>
+          {decision === "info" && (
+            <div className="mt-5 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                El atleta lo ve en su panel y en la postulación. Sigue en revisión.
+              </p>
+              <textarea
+                aria-label="Qué necesitás"
+                placeholder="Ej: Pasanos el link de tu ranking en la federación."
+                value={infoMessage}
+                onChange={(e) => setInfoMessage(e.target.value)}
+                rows={4}
+                className="input input-sm"
+              />
+              <button
+                disabled={busy || !infoMessage.trim()}
+                onClick={() => run(() => adminRequestInfo(accessToken, athleteId, infoMessage))}
+                className="btn btn-primary w-full"
+              >
+                Enviar pedido
+              </button>
+            </div>
+          )}
 
-          <div>
-            <p className="text-sm font-semibold text-foreground">Pedir más información</p>
-            <textarea
-              placeholder="Qué necesitás que agregue"
-              value={infoMessage}
-              onChange={(e) => setInfoMessage(e.target.value)}
-              rows={2}
-              className="input input-sm mt-2 w-full"
-            />
-            <button
-              disabled={busy || !infoMessage}
-              onClick={() => run(() => adminRequestInfo(accessToken, athleteId, infoMessage))}
-              className="mt-2 btn btn-secondary btn-sm"
-            >
-              Enviar pedido
-            </button>
-          </div>
+          {decision === "reject" && (
+            <div className="mt-5 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                El atleta recibe el motivo por email y puede volver a postularse después de la espera.
+              </p>
+              <textarea
+                aria-label="Motivo del rechazo"
+                placeholder="Motivo del rechazo"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={4}
+                className="input input-sm"
+              />
+              <button
+                disabled={busy || !rejectReason.trim()}
+                onClick={() => run(() => adminReject(accessToken, athleteId, rejectReason))}
+                className="btn btn-danger w-full"
+              >
+                Rechazar postulación
+              </button>
+            </div>
+          )}
         </>
       )}
 
       {status === "active" && (
-        <div>
-          <p className="text-sm font-semibold text-foreground">Suspender</p>
+        <div className="mt-4 space-y-3">
+          <p className="text-sm text-muted-foreground">Publicado. Si algo no está bien, podés suspenderlo.</p>
           <textarea
+            aria-label="Motivo de la suspensión"
             placeholder="Motivo de la suspensión"
             value={suspendReason}
             onChange={(e) => setSuspendReason(e.target.value)}
-            rows={2}
-            className="input input-sm mt-2 w-full"
+            rows={3}
+            className="input input-sm"
           />
           <button
-            disabled={busy || !suspendReason}
+            disabled={busy || !suspendReason.trim()}
             onClick={() => run(() => adminSuspend(accessToken, athleteId, suspendReason))}
-            className="mt-2 btn btn-danger btn-sm"
+            className="btn btn-danger w-full"
           >
             Suspender
           </button>
@@ -153,11 +199,42 @@ export function ReviewActions({
         <button
           disabled={busy}
           onClick={() => run(() => adminReactivate(accessToken, athleteId))}
-          className="btn btn-primary btn-sm"
+          className="btn btn-primary mt-4 w-full"
         >
           Reactivar
         </button>
       )}
+
+      {status === "rejected" && (
+        <p className="mt-4 text-sm text-muted-foreground">Rechazado. Puede volver a postularse después de la espera.</p>
+      )}
     </section>
+  );
+}
+
+function Seal({
+  label,
+  hint,
+  checked,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-2.5">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 size-4 accent-[var(--verified)]"
+      />
+      <span>
+        <span className="font-semibold">{label}</span>
+        <span className="block text-muted-foreground">{hint}</span>
+      </span>
+    </label>
   );
 }
