@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
   // Default Supabase email templates point at their own /auth/v1/verify
   // endpoint, which redirects back here with `?code=` for PKCE-flow clients
   // (the default for @supabase/ssr) — this is what actually gets hit unless
-  // the template is customized to embed `{{ .TokenHash }}` directly (that
-  // requires custom SMTP, which we're not using). Handle both regardless.
+  // the template is customized to embed `{{ .TokenHash }}` directly.
+  // Handle both regardless.
   const code = searchParams.get("code");
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
