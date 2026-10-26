@@ -6,7 +6,7 @@ import { AdminAccessDenied } from "@/components/admin-access-denied";
 import { CampaignApprovals } from "./campaign-approvals";
 import { ReviewActions } from "./review-actions";
 import { ViewEvidenceButton } from "./view-evidence-button";
-import { StatusPill } from "@/components/admin-nav";
+import { StatusPill } from "@/components/status-pill";
 import { InstagramIcon } from "@/components/instagram-embed";
 import { Figurita, placeLabel } from "@/components/figurita";
 

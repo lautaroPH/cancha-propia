@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { adminListApplications, ApiError } from "@/lib/api";
 import { AdminAccessDenied } from "@/components/admin-access-denied";
-import { StatusPill } from "@/components/admin-nav";
+import { StatusPill } from "@/components/status-pill";
 
 export default async function AdminQueuePage() {
   const supabase = await createClient();

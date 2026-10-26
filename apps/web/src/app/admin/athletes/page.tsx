@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { StatusPill, statusLabel } from "@/components/admin-nav";
+import { StatusPill, statusLabel } from "@/components/status-pill";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { adminListAthletes, ApiError } from "@/lib/api";
