@@ -1,8 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { updateMe, uploadProfilePhoto, type AthleteDetail, type Achievement } from "@/lib/api";
+import { getSports, updateMe, uploadProfilePhoto, type AthleteDetail, type Achievement } from "@/lib/api";
+import { PROVINCES, SPORTS } from "@/lib/constants";
+import { InstagramIcon } from "@/components/instagram-embed";
+
+const MAX_INSTAGRAM_POSTS = 6;
+// Mirrors the backend's accepted shapes (schemas.normalize_instagram_post) so
+// a bad paste is caught before Save, not after.
+const INSTAGRAM_POST_RE = /^https?:\/\/(www\.)?instagram\.com\/([A-Za-z0-9._]+\/)?(p|reel|reels|tv)\/[A-Za-z0-9_-]+/;
 
 export function ProfileEditor({ athlete, accessToken }: { athlete: AthleteDetail; accessToken: string }) {
   const router = useRouter();
@@ -10,11 +17,25 @@ export function ProfileEditor({ athlete, accessToken }: { athlete: AthleteDetail
   const [photoS3Key, setPhotoS3Key] = useState<string | null>(null);
   const [photoStatus, setPhotoStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [photoError, setPhotoError] = useState("");
+
+  const [sport, setSport] = useState(athlete.sport);
+  const [discipline, setDiscipline] = useState(athlete.discipline ?? "");
+  const [category, setCategory] = useState(athlete.category ?? "");
+  const [province, setProvince] = useState(athlete.province ?? "");
+  const [city, setCity] = useState(athlete.city ?? "");
+  const [club, setClub] = useState(athlete.club ?? "");
+  const [federation, setFederation] = useState(athlete.federation ?? "");
+
   const [bio, setBio] = useState(athlete.bio ?? "");
   const [story, setStory] = useState(athlete.story ?? "");
   const [achievements, setAchievements] = useState<Achievement[]>(athlete.achievements as Achievement[]);
+
   const [instagramHandle, setInstagramHandle] = useState(athlete.instagram_handle ?? "");
   const [instagramPublic, setInstagramPublic] = useState(athlete.instagram_public);
+  const [instagramPosts, setInstagramPosts] = useState<string[]>(athlete.instagram_posts ?? []);
+  const [newPost, setNewPost] = useState("");
+  const [newPostError, setNewPostError] = useState("");
+
   const [whatsappNumber, setWhatsappNumber] = useState(athlete.whatsapp_number ?? "");
   const [whatsappPublic, setWhatsappPublic] = useState(athlete.whatsapp_public);
   const [alias, setAlias] = useState(athlete.alias ?? "");
@@ -27,30 +48,47 @@ export function ProfileEditor({ athlete, accessToken }: { athlete: AthleteDetail
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState("");
 
+  const [sports, setSports] = useState<string[]>(SPORTS);
+  useEffect(() => {
+    getSports()
+      .then((list) => list.length > 0 && setSports(list))
+      .catch(() => {});
+  }, []);
+
+  // Any edit after a save puts the button back to "Guardar" so "Guardado" never lies.
+  function touch() {
+    if (status === "saved") setStatus("idle");
+  }
+
+  function addPost() {
+    const url = newPost.trim();
+    if (!url) return;
+    if (!INSTAGRAM_POST_RE.test(url)) {
+      setNewPostError("Pegá el link de una publicación o reel (instagram.com/p/... o /reel/...).");
+      return;
+    }
+    setInstagramPosts((prev) => [...prev, url]);
+    setNewPost("");
+    setNewPostError("");
+    touch();
+  }
+
   async function save() {
     setStatus("saving");
     setError("");
 
-    // A "público" toggle with nothing behind it just shows blank on the
+    // A "mostrar" toggle with nothing behind it just shows blank on the
     // profile — the API rejects this too, but catch it here for a clearer message.
-    if (instagramPublic && !instagramHandle.trim()) {
+    const missing = [
+      instagramPublic && !instagramHandle.trim() && "tu usuario de Instagram",
+      whatsappPublic && !whatsappNumber.trim() && "tu número de WhatsApp",
+      aliasPublic && !alias.trim() && "tu alias",
+      rafflePublic && !raffleUrl.trim() && "el link de tu rifa",
+    ].filter(Boolean);
+    if (!sport.trim()) missing.unshift("tu deporte");
+    if (missing.length > 0) {
       setStatus("error");
-      setError("Completá tu usuario de Instagram antes de hacerlo público.");
-      return;
-    }
-    if (whatsappPublic && !whatsappNumber.trim()) {
-      setStatus("error");
-      setError("Completá tu número de WhatsApp antes de hacerlo público.");
-      return;
-    }
-    if (aliasPublic && !alias.trim()) {
-      setStatus("error");
-      setError("Completá tu alias antes de mostrarlo en tu perfil público.");
-      return;
-    }
-    if (rafflePublic && !raffleUrl.trim()) {
-      setStatus("error");
-      setError("Completá el link de tu sorteo antes de mostrarlo en tu perfil público.");
+      setError(`Completá ${missing[0]} antes de guardar.`);
       return;
     }
 
@@ -61,13 +99,21 @@ export function ProfileEditor({ athlete, accessToken }: { athlete: AthleteDetail
       .map((a) => ({ ...a, title: a.title.trim() }));
 
     try {
-      await updateMe(accessToken, {
+      const updated = await updateMe(accessToken, {
         ...(photoS3Key ? { photo_s3_key: photoS3Key } : {}),
+        sport: sport.trim(),
+        discipline: discipline.trim() || null,
+        category: category.trim() || null,
+        province: province || null,
+        city: city.trim() || null,
+        club: club.trim() || null,
+        federation: federation.trim() || null,
         bio,
         story,
         achievements: cleanAchievements,
-        instagram_handle: instagramHandle || undefined,
+        instagram_handle: instagramHandle.trim().replace(/^@/, "") || undefined,
         instagram_public: instagramPublic,
+        instagram_posts: instagramPosts,
         whatsapp_number: whatsappNumber || undefined,
         whatsapp_public: whatsappPublic,
         alias: alias || undefined,
@@ -78,6 +124,7 @@ export function ProfileEditor({ athlete, accessToken }: { athlete: AthleteDetail
         raffle_public: rafflePublic,
       });
       setAchievements(cleanAchievements);
+      setInstagramPosts(updated.instagram_posts);
       setPhotoS3Key(null);
       setStatus("saved");
       router.refresh();
@@ -98,6 +145,7 @@ export function ProfileEditor({ athlete, accessToken }: { athlete: AthleteDetail
       setPhotoS3Key(s3Key);
       setPhotoUrl(URL.createObjectURL(file));
       setPhotoStatus("idle");
+      touch();
     } catch (err) {
       setPhotoStatus("error");
       setPhotoError(err instanceof Error ? err.message : "No se pudo subir la foto");
@@ -106,188 +154,332 @@ export function ProfileEditor({ athlete, accessToken }: { athlete: AthleteDetail
 
   function updateAchievement(i: number, patch: Partial<Achievement>) {
     setAchievements((prev) => prev.map((a, idx) => (idx === i ? { ...a, ...patch } : a)));
+    touch();
+  }
+
+  // Wraps a setter so every field edit also resets the "Guardado" state.
+  function on<T>(setter: (v: T) => void) {
+    return (v: T) => {
+      setter(v);
+      touch();
+    };
   }
 
   return (
-    <section className="mt-8 space-y-5 border-t border-border pt-6">
-      <h2 className="text-sm font-semibold text-muted-foreground uppercase">Tu perfil</h2>
-
-      <div className="flex items-center gap-4">
-        <div className="size-20 shrink-0 overflow-hidden rounded-full bg-surface-muted">
-          {photoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={photoUrl} alt="" className="size-full object-cover" />
-          ) : null}
+    <div className="space-y-14">
+      <Group title="Tu figurita" hint="Lo que se ve en el álbum y arriba de tu perfil.">
+        <div className="flex items-center gap-5">
+          <div className="aspect-[3/4] w-24 shrink-0 overflow-hidden rounded-lg bg-celeste">
+            {photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={photoUrl} alt="Tu foto de perfil" className="size-full object-cover" />
+            ) : null}
+          </div>
+          <div>
+            <label className="btn btn-secondary btn-sm cursor-pointer">
+              {photoUrl ? "Cambiar foto" : "Subir foto"}
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoChange} className="sr-only" />
+            </label>
+            <p className="field-hint">Vertical, con tu cara bien visible. JPG o PNG, hasta 5 MB.</p>
+            {photoStatus === "uploading" && <p className="mt-1 text-sm text-accent">Subiendo...</p>}
+            {photoStatus === "error" && <p className="mt-1 text-sm text-danger">{photoError}</p>}
+            {photoS3Key && photoStatus === "idle" && (
+              <p className="mt-1 text-sm text-verified">Lista. Guardá los cambios para publicarla.</p>
+            )}
+          </div>
         </div>
-        <label className="block">
-          <span className="text-sm font-medium text-foreground/90">Foto de perfil</span>
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={handlePhotoChange}
-            className="mt-1 block text-sm text-foreground file:mr-3 file:rounded-lg file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground hover:file:bg-surface-muted"
-          />
-          <p className="mt-1 text-xs text-muted-foreground">Esta se muestra públicamente en tu perfil.</p>
-          {photoStatus === "uploading" && <p className="mt-1 text-xs text-accent">Subiendo...</p>}
-          {photoStatus === "error" && <p className="mt-1 text-xs text-danger">{photoError}</p>}
-          {photoS3Key && photoStatus === "idle" && (
-            <p className="mt-1 text-xs text-verified">✓ Lista — guardá los cambios para publicarla</p>
-          )}
-        </label>
-      </div>
 
-      <label className="block">
-        <span className="text-sm font-medium text-foreground/90">Biografía breve</span>
-        <textarea
-          value={bio}
-          onChange={(e) => setBio(e.target.value)}
-          rows={2}
-          className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-        />
-      </label>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <TextField label="Deporte" value={sport} onChange={on(setSport)} list={sports} listId="dash-sports" required />
+          <TextField label="Disciplina o prueba" value={discipline} onChange={on(setDiscipline)} placeholder="-63 kg, 100 m libre, maratón..." />
+          <TextField label="Categoría" value={category} onChange={on(setCategory)} placeholder="Juvenil, Sub-20, Senior..." />
+          <label className="block">
+            <span className="field-label">Provincia</span>
+            <select value={province} onChange={(e) => on(setProvince)(e.target.value)} className="input mt-1.5">
+              <option value="">Sin especificar</option>
+              {PROVINCES.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </label>
+          <TextField label="Ciudad" value={city} onChange={on(setCity)} placeholder="Mar del Plata" />
+          <TextField label="Club" value={club} onChange={on(setClub)} placeholder="Club Atlético..." />
+          <TextField label="Federación" value={federation} onChange={on(setFederation)} placeholder="Federación Argentina de..." />
+        </div>
+      </Group>
 
-      <label className="block">
-        <span className="text-sm font-medium text-foreground/90">Tu historia</span>
-        <textarea
+      <Group title="Tu historia" hint="Lo primero que lee quien entra a tu perfil.">
+        <TextArea label="En una frase" value={bio} onChange={on(setBio)} rows={2} placeholder="Judoca marplatense, bicampeona nacional juvenil." />
+        <TextArea
+          label="Tu historia"
           value={story}
-          onChange={(e) => setStory(e.target.value)}
-          rows={4}
-          className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+          onChange={on(setStory)}
+          rows={6}
+          placeholder="Cómo empezaste, qué lograste, qué se viene y para qué necesitás apoyo."
         />
-      </label>
 
-      <div>
-        <span className="text-sm font-medium text-foreground/90">Logros</span>
-        <div className="mt-2 space-y-3">
-          {achievements.map((a, i) => (
-            <div key={i} className="space-y-1.5 rounded-lg border border-border p-2.5">
-              <div className="flex gap-2">
+        <div>
+          <p className="field-label">Logros</p>
+          <div className="mt-2 space-y-3">
+            {achievements.map((a, i) => (
+              <div key={i} className="grid gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1fr_10rem_auto]">
                 <input
-                  placeholder="Título (obligatorio)"
+                  aria-label="Logro"
+                  placeholder="Ej: Campeona nacional juvenil"
                   value={a.title}
                   onChange={(e) => updateAchievement(i, { title: e.target.value })}
-                  className="flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+                  className="input input-sm"
                 />
                 <input
                   type="date"
+                  aria-label="Fecha"
                   value={a.date ?? ""}
                   onChange={(e) => updateAchievement(i, { date: e.target.value || undefined })}
-                  className="w-40 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+                  className="input input-sm"
                 />
                 <button
                   type="button"
-                  onClick={() => setAchievements((prev) => prev.filter((_, idx) => idx !== i))}
-                  className="px-2 text-sm text-muted-foreground hover:text-danger"
+                  onClick={() => {
+                    setAchievements((prev) => prev.filter((_, idx) => idx !== i));
+                    touch();
+                  }}
+                  className="btn btn-sm text-muted-foreground hover:text-danger"
                 >
                   Quitar
                 </button>
+                <input
+                  aria-label="Detalle"
+                  placeholder="Detalle (opcional)"
+                  value={a.description ?? ""}
+                  onChange={(e) => updateAchievement(i, { description: e.target.value || undefined })}
+                  className="input input-sm sm:col-span-3"
+                />
               </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setAchievements((prev) => [...prev, { title: "" }])}
+              className="text-sm font-semibold text-accent underline hover:no-underline"
+            >
+              Sumar un logro
+            </button>
+          </div>
+        </div>
+      </Group>
+
+      <Group title="Instagram" hint="Elegí hasta 6 publicaciones o reels para mostrar en tu perfil.">
+        <div className="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-end">
+          <label className="block">
+            <span className="field-label">Usuario</span>
+            <span className="mt-1.5 flex items-stretch">
+              <span className="inline-flex items-center rounded-l-lg border border-r-0 border-border bg-surface-muted px-3 font-semibold text-muted-foreground">
+                @
+              </span>
               <input
-                placeholder="Descripción (opcional)"
-                value={a.description ?? ""}
-                onChange={(e) => updateAchievement(i, { description: e.target.value || undefined })}
-                className="w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={instagramHandle}
+                onChange={(e) => on(setInstagramHandle)(e.target.value.replace(/^@/, ""))}
+                className="input rounded-l-none"
               />
+            </span>
+          </label>
+          <Toggle label="Mostrar en mi perfil" checked={instagramPublic} onChange={on(setInstagramPublic)} />
+        </div>
+
+        <div>
+          <p className="field-label">Publicaciones destacadas</p>
+          {instagramPosts.length > 0 && (
+            <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
+              {instagramPosts.map((url) => (
+                <li key={url} className="flex items-center gap-3 px-3 py-2.5 text-sm">
+                  <InstagramIcon className="size-4 shrink-0 text-muted-foreground" />
+                  <a href={url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate hover:underline">
+                    {url.replace(/^https?:\/\/(www\.)?/, "")}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInstagramPosts((prev) => prev.filter((p) => p !== url));
+                      touch();
+                    }}
+                    className="font-semibold text-muted-foreground hover:text-danger"
+                  >
+                    Quitar
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {instagramPosts.length < MAX_INSTAGRAM_POSTS ? (
+            <div className="mt-2 flex gap-2">
+              <input
+                aria-label="Link de la publicación"
+                inputMode="url"
+                value={newPost}
+                onChange={(e) => {
+                  setNewPost(e.target.value);
+                  setNewPostError("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addPost();
+                  }
+                }}
+                placeholder="https://www.instagram.com/p/..."
+                className="input flex-1"
+              />
+              <button type="button" onClick={addPost} className="btn btn-secondary">
+                Agregar
+              </button>
             </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => setAchievements((prev) => [...prev, { title: "" }])}
-            className="text-sm font-medium text-accent hover:underline"
-          >
-            + Agregar logro
-          </button>
-          <p className="text-xs text-muted-foreground">
-            Los logros sin título no se guardan.
+          ) : (
+            <p className="field-hint">Ya tenés 6. Quitá una para sumar otra.</p>
+          )}
+          {newPostError ? (
+            <p className="mt-1.5 text-sm text-danger">{newPostError}</p>
+          ) : (
+            <p className="field-hint">En Instagram: tocá ··· en la publicación, «Copiar enlace», y pegalo acá.</p>
+          )}
+        </div>
+      </Group>
+
+      <Group title="Cómo te pueden bancar" hint="Codeportistas nunca toca este dinero: solo lo muestra para que te transfieran directo.">
+        <div className="space-y-4 rounded-xl bg-sol-soft p-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField label="Alias" value={alias} onChange={on(setAlias)} placeholder="martina.judo.mp" />
+            <TextField label="CBU / CVU (opcional)" value={cbu} onChange={on(setCbu)} inputMode="numeric" />
+          </div>
+          <Toggle label="Mostrar alias en mi perfil" checked={aliasPublic} onChange={on(setAliasPublic)} />
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-end">
+          <TextField label="WhatsApp" value={whatsappNumber} onChange={on(setWhatsappNumber)} placeholder="+54 9 11..." inputMode="tel" />
+          <Toggle label="Mostrar en mi perfil" checked={whatsappPublic} onChange={on(setWhatsappPublic)} />
+        </div>
+
+        <div className="space-y-4">
+          <TextField
+            label="Link a tu rifa o sorteo"
+            value={raffleUrl}
+            onChange={on(setRaffleUrl)}
+            placeholder="https://"
+            inputMode="url"
+          />
+          <TextField label="De qué se trata (opcional)" value={raffleDescription} onChange={on(setRaffleDescription)} />
+          <Toggle label="Mostrar la rifa en mi perfil" checked={rafflePublic} onChange={on(setRafflePublic)} />
+          <p className="field-hint">La rifa la organizás vos, por fuera de la plataforma. Nosotros solo mostramos el link.</p>
+        </div>
+      </Group>
+
+      <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-4 border-t border-border bg-background px-4 py-4 sm:-mx-6 sm:px-6">
+        <button type="button" onClick={save} disabled={status === "saving"} className="btn btn-primary px-6">
+          {status === "saving" ? "Guardando..." : status === "saved" ? "Guardado" : "Guardar cambios"}
+        </button>
+        {status === "error" && (
+          <p role="alert" className="text-sm text-danger">
+            {error}
           </p>
-        </div>
+        )}
       </div>
+    </div>
+  );
+}
 
-      <div className="space-y-3 rounded-lg border border-border p-4">
-        <p className="text-sm font-medium text-foreground">Instagram</p>
-        <div className="flex gap-2">
-          <input
-            placeholder="usuario (sin @)"
-            value={instagramHandle}
-            onChange={(e) => setInstagramHandle(e.target.value)}
-            className="flex-1 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-          />
-          <label className="flex items-center gap-1.5 text-sm text-foreground/90">
-            <input type="checkbox" checked={instagramPublic} onChange={(e) => setInstagramPublic(e.target.checked)} />
-            Público
-          </label>
-        </div>
-
-        <p className="text-sm font-medium text-foreground">WhatsApp</p>
-        <div className="flex gap-2">
-          <input
-            placeholder="+54 9 11..."
-            value={whatsappNumber}
-            onChange={(e) => setWhatsappNumber(e.target.value)}
-            className="flex-1 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-          />
-          <label className="flex items-center gap-1.5 text-sm text-foreground/90">
-            <input type="checkbox" checked={whatsappPublic} onChange={(e) => setWhatsappPublic(e.target.checked)} />
-            Público
-          </label>
-        </div>
-
-        <p className="text-sm font-medium text-foreground">Alias / CBU para transferencias</p>
-        <input
-          placeholder="alias.mercadopago"
-          value={alias}
-          onChange={(e) => setAlias(e.target.value)}
-          className="w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-        />
-        <input
-          placeholder="CBU (opcional)"
-          value={cbu}
-          onChange={(e) => setCbu(e.target.value)}
-          className="w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-        />
-        <label className="flex items-center gap-1.5 text-sm text-foreground/90">
-          <input type="checkbox" checked={aliasPublic} onChange={(e) => setAliasPublic(e.target.checked)} />
-          Mostrar en mi perfil público
-        </label>
-        <p className="text-xs text-muted-foreground">
-          La plataforma nunca procesa ni retiene este dinero — solo lo muestra para que te transfieran
-          directo.
-        </p>
+function Group({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-6">
+      <div>
+        <h2 className="group-title">{title}</h2>
+        {hint && <p className="field-hint">{hint}</p>}
       </div>
-
-      <div className="space-y-3 rounded-lg border border-border p-4">
-        <p className="text-sm font-medium text-foreground">Sorteo o rifa</p>
-        <input
-          placeholder="Link a tu sorteo (Instagram, sitio externo, etc.)"
-          value={raffleUrl}
-          onChange={(e) => setRaffleUrl(e.target.value)}
-          className="w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-        />
-        <input
-          placeholder="Breve descripción (opcional)"
-          value={raffleDescription}
-          onChange={(e) => setRaffleDescription(e.target.value)}
-          className="w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-        />
-        <label className="flex items-center gap-1.5 text-sm text-foreground/90">
-          <input type="checkbox" checked={rafflePublic} onChange={(e) => setRafflePublic(e.target.checked)} />
-          Mostrar en mi perfil público
-        </label>
-        <p className="text-xs text-muted-foreground">
-          El sorteo lo organizás y gestionás vos, fuera de la plataforma — nosotros solo mostramos el
-          link.
-        </p>
-      </div>
-
-      {status === "error" && <p className="text-sm text-danger">{error}</p>}
-
-      <button
-        onClick={save}
-        disabled={status === "saving"}
-        className="rounded-lg bg-accent px-4 py-2 font-medium text-accent-foreground hover:opacity-90 disabled:opacity-50"
-      >
-        {status === "saving" ? "Guardando..." : status === "saved" ? "Guardado ✓" : "Guardar cambios"}
-      </button>
+      {children}
     </section>
+  );
+}
+
+function TextField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  list,
+  listId,
+  required,
+  inputMode,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  list?: string[];
+  listId?: string;
+  required?: boolean;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+}) {
+  return (
+    <label className="block">
+      <span className="field-label">{label}</span>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        list={list ? listId : undefined}
+        required={required}
+        inputMode={inputMode}
+        className="input mt-1.5"
+      />
+      {list && (
+        <datalist id={listId}>
+          {list.map((option) => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
+      )}
+    </label>
+  );
+}
+
+function TextArea({
+  label,
+  value,
+  onChange,
+  rows,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  rows: number;
+  placeholder?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="field-label">{label}</span>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={rows}
+        placeholder={placeholder}
+        className="input mt-1.5 leading-relaxed"
+      />
+    </label>
+  );
+}
+
+function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2.5 py-2 text-sm font-semibold">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="size-4 accent-[var(--accent)]"
+      />
+      {label}
+    </label>
   );
 }

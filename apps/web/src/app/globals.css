@@ -3,60 +3,90 @@
 /*
  * Theme tokens. `data-theme` is set by ThemeScript (inline, before paint) and
  * ThemeToggle (client). No attribute = follow the OS preference.
+ *
+ * The world is an album de figuritas: white ground, celeste fields that own
+ * whole regions, navy ink, and sol reserved for "how to support" moments.
  */
 :root {
-  --background: #fafaf7;
+  --background: #ffffff;
   --surface: #ffffff;
-  --surface-muted: #f1f2ed;
-  --foreground: #1b2320;
-  --muted-foreground: #5b6560;
-  --border: #e1e3dc;
-  --accent: #c4531e;
+  --surface-muted: #eef4fa;
+  --foreground: #0e1b33;
+  --muted-foreground: #4b5b73;
+  --border: #d3e0ec;
+  --accent: #164c8a;
   --accent-foreground: #ffffff;
-  --accent-soft: #f3e2d6;
-  --accent-strong: #9a3d14;
-  --verified: #2e7a56;
-  --verified-soft: #dceee3;
-  --danger: #b23b3b;
-  --danger-soft: #f4dede;
+  --accent-soft: #e2eefa;
+  --accent-strong: #0f3a6b;
+  --celeste: #74acdf;
+  --celeste-soft: #dcebf8;
+  --on-celeste: #0e1b33;
+  --ink: #0e1b33;
+  --on-ink: #ffffff;
+  --sol: #f6b40e;
+  --sol-soft: #fdf1cf;
+  --on-sol: #2a1d00;
+  --verified: #1b7a4b;
+  --verified-soft: #dcf1e4;
+  --on-verified: #ffffff;
+  --danger: #b3261e;
+  --danger-soft: #fbe3e1;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --background: #131210;
-    --surface: #1c1a16;
-    --surface-muted: #221f1a;
-    --foreground: #edeae2;
-    --muted-foreground: #a8a399;
-    --border: #34312a;
-    --accent: #e37e3f;
-    --accent-foreground: #1a1200;
-    --accent-soft: #3a2718;
-    --accent-strong: #f0a874;
-    --verified: #6fcb9f;
-    --verified-soft: #17301f;
-    --danger: #e08080;
-    --danger-soft: #3a1f1f;
+    --background: #0a1322;
+    --surface: #0f1b2e;
+    --surface-muted: #15243b;
+    --foreground: #eaf2fb;
+    --muted-foreground: #9fb2c9;
+    --border: #233650;
+    --accent: #8cc3f0;
+    --accent-foreground: #0a1322;
+    --accent-soft: #14304f;
+    --accent-strong: #b9dbf7;
+    --celeste: #2b5f91;
+    --celeste-soft: #16304d;
+    --on-celeste: #f2f7fc;
+    --ink: #050b16;
+    --on-ink: #eaf2fb;
+    --sol: #f6b40e;
+    --sol-soft: #3a2c08;
+    --on-sol: #1d1400;
+    --verified: #5fd39a;
+    --verified-soft: #11301f;
+    --on-verified: #0a1322;
+    --danger: #f28b84;
+    --danger-soft: #3b1a18;
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --background: #131210;
-  --surface: #1c1a16;
-  --surface-muted: #221f1a;
-  --foreground: #edeae2;
-  --muted-foreground: #a8a399;
-  --border: #34312a;
-  --accent: #e37e3f;
-  --accent-foreground: #1a1200;
-  --accent-soft: #3a2718;
-  --accent-strong: #f0a874;
-  --verified: #6fcb9f;
-  --verified-soft: #17301f;
-  --danger: #e08080;
-  --danger-soft: #3a1f1f;
+  --background: #0a1322;
+  --surface: #0f1b2e;
+  --surface-muted: #15243b;
+  --foreground: #eaf2fb;
+  --muted-foreground: #9fb2c9;
+  --border: #233650;
+  --accent: #8cc3f0;
+  --accent-foreground: #0a1322;
+  --accent-soft: #14304f;
+  --accent-strong: #b9dbf7;
+  --celeste: #2b5f91;
+  --celeste-soft: #16304d;
+  --on-celeste: #f2f7fc;
+  --ink: #050b16;
+  --on-ink: #eaf2fb;
+  --sol: #f6b40e;
+  --sol-soft: #3a2c08;
+  --on-sol: #1d1400;
+  --verified: #5fd39a;
+  --verified-soft: #11301f;
+  --on-verified: #0a1322;
+  --danger: #f28b84;
+  --danger-soft: #3b1a18;
   color-scheme: dark;
 }
 
@@ -75,15 +105,216 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-accent-soft: var(--accent-soft);
   --color-accent-strong: var(--accent-strong);
+  --color-celeste: var(--celeste);
+  --color-celeste-soft: var(--celeste-soft);
+  --color-on-celeste: var(--on-celeste);
+  --color-ink: var(--ink);
+  --color-on-ink: var(--on-ink);
+  --color-sol: var(--sol);
+  --color-sol-soft: var(--sol-soft);
+  --color-on-sol: var(--on-sol);
   --color-verified: var(--verified);
   --color-verified-soft: var(--verified-soft);
+  --color-on-verified: var(--on-verified);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+
+  /* Figurita corners: squared, like a printed card — not app-store pills. */
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+  --radius-2xl: 8px;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Page titles everywhere (admin included) speak in the condensed display voice. */
+h1 {
+  font-stretch: 62%;
+  font-weight: 850;
+  text-transform: uppercase;
+  line-height: 0.95;
+  letter-spacing: -0.005em;
+  text-wrap: balance;
+}
+
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+::selection {
+  background: var(--celeste);
+  color: var(--on-celeste);
+}
+
+input,
+textarea {
+  caret-color: var(--accent);
+}
+
+a {
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+html {
+  scrollbar-color: var(--border) var(--background);
+}
+
+@layer components {
+  .display {
+    font-stretch: 62%;
+    font-weight: 850;
+    text-transform: uppercase;
+    line-height: 0.92;
+    letter-spacing: -0.005em;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: var(--radius-lg);
+    padding: 0.625rem 1.125rem;
+    font-size: 0.9375rem;
+    font-weight: 650;
+    line-height: 1.25rem;
+    transition:
+      background-color 150ms ease-out,
+      color 150ms ease-out,
+      border-color 150ms ease-out,
+      transform 150ms ease-out;
+  }
+  .btn:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent-strong);
+  }
+  .btn-secondary {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--foreground);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .btn-sol {
+    background: var(--sol);
+    color: var(--on-sol);
+  }
+  .btn-sol:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--sol) 85%, black);
+  }
+  .btn-verified {
+    background: var(--verified);
+    color: var(--on-verified);
+  }
+  .btn-verified:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--verified) 85%, black);
+  }
+  .btn-danger {
+    border: 1px solid var(--danger);
+    color: var(--danger);
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: var(--danger-soft);
+  }
+
+  .field-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--foreground);
+  }
+  .field-hint {
+    margin-top: 0.375rem;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+  }
+  .input {
+    width: 100%;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 0.625rem 0.75rem;
+    font-size: 1rem;
+    color: var(--foreground);
+    transition:
+      border-color 150ms ease-out,
+      box-shadow 150ms ease-out;
+  }
+  .input::placeholder {
+    color: var(--muted-foreground);
+    opacity: 0.8;
+  }
+  .input:hover {
+    border-color: color-mix(in oklab, var(--border) 50%, var(--accent));
+  }
+  .input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
+  }
+  .input-sm {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.875rem;
+  }
+
+  /* Section label inside a working screen — sits above a group, not above a headline. */
+  .group-title {
+    font-stretch: 62%;
+    font-weight: 800;
+    font-size: 1.375rem;
+    line-height: 1;
+    text-transform: uppercase;
+    color: var(--foreground);
+  }
+}
+
+/* Figurita hover: lift and tilt like a card picked off the table. */
+.figurita-link {
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.figurita-link:hover,
+.figurita-link:focus-visible {
+  transform: translateY(-6px) rotate(-1.5deg);
+}
+.figurita-link:nth-child(even):hover,
+.figurita-link:nth-child(even):focus-visible {
+  transform: translateY(-6px) rotate(1.5deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .figurita-link,
+  .figurita-link:hover,
+  .figurita-link:focus-visible {
+    transition: none;
+    transform: none;
+  }
 }

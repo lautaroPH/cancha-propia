@@ -3,7 +3,6 @@ from datetime import date, timedelta
 import pytest
 from pydantic import ValidationError
 
-from app.core.security import hash_national_id
 from app.schemas.schemas import AthleteSelfUpdate, ApplicationCreate
 
 
@@ -11,11 +10,8 @@ def _base_payload(**overrides):
     payload = dict(
         full_name="Martina López",
         date_of_birth=date(2000, 1, 1),
-        national_id="30111222",
         sport="Judo",
-        evidence_links=["https://example.com/ranking"],
-        id_document_s3_key="evidence/11111111-1111-1111-1111-111111111111/abc.jpg",
-        selfie_with_id_s3_key="evidence/11111111-1111-1111-1111-111111111111/def.jpg",
+        instagram_handle="martinalopez.judo",
     )
     payload.update(overrides)
     return payload
@@ -54,14 +50,41 @@ def test_minor_application_with_email_and_consent_is_valid():
     assert app.guardian_consent is True
 
 
-def test_application_requires_at_least_one_evidence_link():
-    with pytest.raises(ValidationError, match="evidence link is required"):
-        ApplicationCreate(**_base_payload(date_of_birth=_years_ago(20), evidence_links=[]))
+def test_application_requires_instagram_or_a_link():
+    with pytest.raises(ValidationError, match="Instagram or at least one link"):
+        ApplicationCreate(**_base_payload(instagram_handle=None, evidence_links=[]))
 
 
-def test_application_rejects_blank_only_evidence_links():
-    with pytest.raises(ValidationError, match="evidence link is required"):
-        ApplicationCreate(**_base_payload(date_of_birth=_years_ago(20), evidence_links=["   "]))
+def test_application_with_only_a_link_is_valid():
+    app = ApplicationCreate(**_base_payload(instagram_handle=None, evidence_links=["  https://example.com/ranking "]))
+    assert app.evidence_links == ["https://example.com/ranking"]
+
+
+def test_application_rejects_blank_only_links_without_instagram():
+    with pytest.raises(ValidationError, match="Instagram or at least one link"):
+        ApplicationCreate(**_base_payload(instagram_handle="", evidence_links=["   "]))
+
+
+def test_application_rejects_national_id_field():
+    # DNI is no longer collected — extra="forbid" keeps a stale client from
+    # silently sending it anyway.
+    with pytest.raises(ValidationError):
+        ApplicationCreate(**_base_payload(national_id="30111222"))
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["martina", "@martina", "https://www.instagram.com/martina/", "instagram.com/martina?igsh=abc"],
+)
+def test_instagram_handle_is_normalized(raw):
+    if raw.startswith("instagram.com"):
+        raw = "https://" + raw
+    assert ApplicationCreate(**_base_payload(instagram_handle=raw)).instagram_handle == "martina"
+
+
+def test_instagram_handle_rejects_invalid_characters():
+    with pytest.raises(ValidationError, match="valid Instagram username"):
+        ApplicationCreate(**_base_payload(instagram_handle="martina lópez"))
 
 
 def test_application_rejects_javascript_uri_evidence_link():
@@ -85,9 +108,26 @@ def test_raffle_url_accepts_http_url():
     assert update.raffle_url == "https://instagram.com/p/example"
 
 
-def test_national_id_hash_is_stable_and_ignores_formatting():
-    assert hash_national_id("30.111.222") == hash_national_id("30111222")
+def test_instagram_posts_are_canonicalized_and_deduplicated():
+    update = AthleteSelfUpdate(
+        instagram_posts=[
+            "https://www.instagram.com/p/C8abc123/?igsh=xyz",
+            "https://instagram.com/reels/DA_x-9/",
+            "https://www.instagram.com/martina/p/C8abc123/",
+            "  ",
+        ]
+    )
+    assert update.instagram_posts == [
+        "https://www.instagram.com/p/C8abc123/",
+        "https://www.instagram.com/reel/DA_x-9/",
+    ]
 
 
-def test_national_id_hash_differs_for_different_ids():
-    assert hash_national_id("30111222") != hash_national_id("30111223")
+def test_instagram_posts_reject_non_instagram_links():
+    with pytest.raises(ValidationError, match="Instagram post or reel"):
+        AthleteSelfUpdate(instagram_posts=["https://tiktok.com/@martina/video/1"])
+
+
+def test_instagram_posts_are_capped():
+    with pytest.raises(ValidationError):
+        AthleteSelfUpdate(instagram_posts=[f"https://www.instagram.com/p/post{i}/" for i in range(7)])

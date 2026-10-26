@@ -48,6 +48,7 @@ def _self_view(athlete: Athlete, evidence: list[EvidenceFile]) -> AthleteSelfVie
         next_review_due=athlete.next_review_due,
         instagram_handle=athlete.instagram_handle,
         instagram_public=athlete.instagram_public,
+        instagram_posts=athlete.instagram_posts or [],
         whatsapp_number=athlete.whatsapp_number,
         whatsapp_public=athlete.whatsapp_public,
         alias=athlete.alias,
@@ -115,6 +116,8 @@ async def update_my_profile(
     # mode="json" so achievement dates serialize to strings before landing in
     # the JSONB column, instead of raw `date` objects the driver can't encode.
     for field, value in payload.model_dump(exclude_unset=True, mode="json").items():
+        if field == "sport" and value is None:
+            continue  # non-nullable — an explicit null means "leave as is"
         setattr(athlete, field, value)
 
     await db.commit()

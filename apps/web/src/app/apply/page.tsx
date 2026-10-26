@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { submitApplication, uploadEvidenceFile, getMe, getSports, ApiError, type AthleteDetail } from "@/lib/api";
+import { submitApplication, getMe, getSports, ApiError, type AthleteDetail } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
-import { PROVINCES } from "@/lib/constants";
+import { PROVINCES, SPORTS } from "@/lib/constants";
+import { Figurita } from "@/components/figurita";
 
 function isMinor(dateOfBirth: string): boolean {
   if (!dateOfBirth) return false;
@@ -20,28 +22,29 @@ export default function ApplyPage() {
   // showing anything — avoids a flash of the form for someone about to be redirected.
   const [status, setStatus] = useState<"checking" | "idle" | "submitting" | "done" | "error">("checking");
   const [errorMessage, setErrorMessage] = useState("");
-  const [dateOfBirth, setDateOfBirth] = useState("");
   const [sessionEmail, setSessionEmail] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [reapplyAvailableAt, setReapplyAvailableAt] = useState<string | null>(null);
-  // Rejected applicant's previous submission — used to prefill the form so
-  // resubmitting doesn't mean retyping everything from scratch.
+  // Rejected or still-pending applicant's previous submission — prefills the
+  // form so resubmitting doesn't mean retyping everything from scratch.
   const [previous, setPrevious] = useState<AthleteDetail | null>(null);
+
+  // Controlled so the figurita preview can fill in as the athlete types.
+  const [fullName, setFullName] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [sport, setSport] = useState("");
+  const [province, setProvince] = useState("");
+  const [city, setCity] = useState("");
+  const [instagram, setInstagram] = useState("");
+  const [showLink, setShowLink] = useState(false);
+  const [link, setLink] = useState("");
   const minor = useMemo(() => isMinor(dateOfBirth), [dateOfBirth]);
 
-  const [idDocument, setIdDocument] = useState<{ s3_key: string; filename: string } | null>(null);
-  const [idDocumentStatus, setIdDocumentStatus] = useState<"idle" | "uploading" | "error">("idle");
-  const [idDocumentError, setIdDocumentError] = useState("");
-
-  const [selfieWithId, setSelfieWithId] = useState<{ s3_key: string; filename: string } | null>(null);
-  const [selfieStatus, setSelfieStatus] = useState<"idle" | "uploading" | "error">("idle");
-  const [selfieError, setSelfieError] = useState("");
-
-  const [sports, setSports] = useState<string[]>([]);
+  const [sports, setSports] = useState<string[]>(SPORTS);
   useEffect(() => {
     getSports()
-      .then(setSports)
-      .catch(() => setSports([]));
+      .then((list) => list.length > 0 && setSports(list))
+      .catch(() => {});
   }, []);
 
   // Applying requires being logged in — that's what lets us link the
@@ -62,15 +65,20 @@ export default function ApplyPage() {
       try {
         const athlete = await getMe(session.access_token);
         if (athlete.status === "rejected" || athlete.status === "pending") {
-          // Rejected: resubmitting after the cooldown. Pending: still under
-          // review, but editable any time — e.g. after an admin asks for more
-          // info, or the applicant just spots their own mistake.
           if (athlete.status === "rejected") setReapplyAvailableAt(athlete.reapply_available_at);
           setPrevious(athlete);
+          setFullName(athlete.full_name);
           setDateOfBirth(athlete.date_of_birth);
+          setSport(athlete.sport);
+          setProvince(athlete.province ?? "");
+          setCity(athlete.city ?? "");
+          setInstagram(athlete.instagram_handle ?? "");
+          const previousLink = athlete.evidence.find((e) => e.kind === "federation_link")?.s3_key ?? "";
+          setLink(previousLink);
+          setShowLink(Boolean(previousLink));
           setStatus("idle");
         } else {
-          // active/suspended — nothing to edit here, re-review requests go elsewhere.
+          // active/suspended — nothing to edit here, the dashboard owns the rest.
           router.replace("/dashboard");
         }
       } catch (err) {
@@ -86,82 +94,35 @@ export default function ApplyPage() {
     });
   }, [router]);
 
-  async function handleIdDocumentChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIdDocumentStatus("uploading");
-    setIdDocumentError("");
-    try {
-      const uploaded = await uploadEvidenceFile(accessToken, file);
-      setIdDocument(uploaded);
-      setIdDocumentStatus("idle");
-    } catch (err) {
-      setIdDocument(null);
-      setIdDocumentStatus("error");
-      setIdDocumentError(err instanceof Error ? err.message : "No se pudo subir el archivo");
-    }
-  }
-
-  async function handleSelfieChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setSelfieStatus("uploading");
-    setSelfieError("");
-    try {
-      const uploaded = await uploadEvidenceFile(accessToken, file);
-      setSelfieWithId(uploaded);
-      setSelfieStatus("idle");
-    } catch (err) {
-      setSelfieWithId(null);
-      setSelfieStatus("error");
-      setSelfieError(err instanceof Error ? err.message : "No se pudo subir el archivo");
-    }
-  }
-
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    if (!idDocument) {
+    const handle = instagram.trim().replace(/^@/, "");
+    const trimmedLink = link.trim();
+    if (!handle && !trimmedLink) {
       setStatus("error");
-      setErrorMessage("Subí una foto de tu DNI antes de enviar la postulación.");
+      setErrorMessage("Sumá tu Instagram o un link donde se vea tu carrera, así podemos revisar tu perfil.");
       return;
     }
-    if (!selfieWithId) {
+    if (trimmedLink && !/^https?:\/\//.test(trimmedLink)) {
       setStatus("error");
-      setErrorMessage("Subí una selfie con tu DNI antes de enviar la postulación.");
+      setErrorMessage("El link tiene que empezar con https://");
       return;
     }
 
     setStatus("submitting");
     setErrorMessage("");
-
     const form = new FormData(e.currentTarget);
-    const evidenceLinksRaw = String(form.get("evidence_links") ?? "");
 
     try {
       await submitApplication(accessToken, {
-        full_name: String(form.get("full_name")),
-        date_of_birth: String(form.get("date_of_birth")),
-        national_id: String(form.get("national_id")),
-        province: String(form.get("province") || "") || undefined,
-        city: String(form.get("city") || "") || undefined,
-        sport: String(form.get("sport")),
-        discipline: String(form.get("discipline") || "") || undefined,
-        category: String(form.get("category") || "") || undefined,
-        club: String(form.get("club") || "") || undefined,
-        federation: String(form.get("federation") || "") || undefined,
-        bio: String(form.get("bio") || "") || undefined,
-        story: String(form.get("story") || "") || undefined,
-        evidence_links: evidenceLinksRaw
-          .split("\n")
-          .map((l) => l.trim())
-          .filter(Boolean),
-        id_document_s3_key: idDocument.s3_key,
-        id_document_filename: idDocument.filename,
-        selfie_with_id_s3_key: selfieWithId.s3_key,
-        selfie_with_id_filename: selfieWithId.filename,
+        full_name: fullName.trim(),
+        date_of_birth: dateOfBirth,
+        sport: sport.trim(),
+        province: province || undefined,
+        city: city.trim() || undefined,
+        instagram_handle: handle || undefined,
+        evidence_links: trimmedLink ? [trimmedLink] : [],
         guardian_email: minor ? String(form.get("guardian_email")) : undefined,
         guardian_consent: minor ? form.get("guardian_consent") === "on" : undefined,
       });
@@ -171,319 +132,238 @@ export default function ApplyPage() {
       if (err instanceof ApiError && err.status === 429) {
         setErrorMessage(
           reapplyAvailableAt
-            ? `Todavía no podés volver a postularte — podés intentar de nuevo a partir del ${new Date(
-                reapplyAvailableAt
-              ).toLocaleString("es-AR")}.`
-            : "Todavía no podés volver a postularte. Probá de nuevo más tarde."
+            ? `Todavía no podés volver a enviarla. Probá a partir del ${new Date(reapplyAvailableAt).toLocaleString("es-AR")}.`
+            : "Todavía no podés volver a enviarla. Probá de nuevo más tarde."
         );
       } else {
-        setErrorMessage(err instanceof Error ? err.message : "Algo salió mal. Intentá de nuevo.");
+        setErrorMessage(err instanceof Error ? err.message : "Algo salió mal. Probá de nuevo.");
       }
     }
   }
 
+  const place = [city, province].filter((v) => v.trim()).join(", ");
+  const preview = (
+    <Figurita name={fullName} sport={sport} place={place || null} size="md" className="w-full" />
+  );
+
   if (status === "checking") {
-    return <div className="mx-auto max-w-xl px-6 py-16" />;
+    return <div className="min-h-[60vh]" />;
   }
 
   if (status === "done") {
     return (
-      <div className="mx-auto max-w-xl px-6 py-16 text-center">
-        <h1 className="text-2xl font-bold text-foreground">¡Recibimos tu postulación!</h1>
-        <p className="mt-3 text-muted-foreground">
-          Un administrador va a revisar tu información y evidencia en los próximos días. Te vamos a
-          escribir a <span className="font-medium text-foreground">{sessionEmail}</span> apenas
-          tengamos una respuesta.
-        </p>
+      <div className="mx-auto grid max-w-4xl items-center gap-10 px-4 py-14 sm:px-6 md:grid-cols-[240px_1fr] md:py-20">
+        <div className="mx-auto w-52 -rotate-3 md:w-full">{preview}</div>
+        <div>
+          <h1 className="text-[3rem] sm:text-[3.75rem]">¡Tu figurita está en revisión!</h1>
+          <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
+            Nuestro equipo la revisa en los próximos días y te escribe a{" "}
+            <span className="font-semibold text-foreground">{sessionEmail}</span>. Mientras tanto, completá tu perfil:
+            foto, historia, logros y tus mejores posteos.
+          </p>
+          <Link href="/dashboard" className="btn btn-primary mt-8 px-6 py-3 text-base">
+            Completar mi perfil
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-xl px-6 py-12">
-      <h1 className="text-2xl font-bold text-foreground">Postularme como atleta</h1>
-      <p className="mt-2 text-muted-foreground">
-        Esta información es privada y se usa solo para verificar tu identidad y trayectoria deportiva.
-        Vos elegís después qué mostrar en tu perfil público.
+    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
+      <p className="mb-3 text-sm font-semibold text-muted-foreground">{previous ? "Tu postulación" : "Paso 2 de 2"}</p>
+      <h1 className="text-[3rem] sm:text-[4rem]">{previous ? "Actualizá tu figurita" : "Armá tu figurita"}</h1>
+      <p className="mt-3 max-w-xl text-lg leading-relaxed text-muted-foreground">
+        Cinco datos y listo. Foto, historia y todo lo demás lo sumás después desde tu panel.
       </p>
-      {sessionEmail && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Postulando con la cuenta <span className="font-medium text-foreground">{sessionEmail}</span> —
-          ahí vamos a avisarte cuando la revisemos.
-        </p>
-      )}
 
       {reapplyAvailableAt && new Date(reapplyAvailableAt) > new Date() && (
-        <p className="mt-4 rounded-lg bg-accent-soft px-3 py-2 text-sm text-accent-strong">
-          Tu postulación anterior fue rechazada. Podés volver a postularte a partir del{" "}
+        <p className="mt-6 max-w-xl rounded-lg bg-accent-soft px-4 py-3 text-sm text-accent-strong">
+          Tu postulación anterior no fue aprobada. Podés volver a enviarla a partir del{" "}
           {new Date(reapplyAvailableAt).toLocaleString("es-AR")}.
         </p>
       )}
 
       {previous?.status === "pending" && previous.info_requested_message && (
-        <div className="mt-4 rounded-lg border border-accent bg-accent-soft px-3 py-2">
-          <p className="text-sm font-medium text-accent-strong">Un administrador pidió más información:</p>
-          <p className="mt-1 text-sm text-foreground/90">{previous.info_requested_message}</p>
+        <div className="mt-6 max-w-xl rounded-lg bg-sol-soft px-4 py-3">
+          <p className="text-sm font-semibold">Nuestro equipo te pidió más información:</p>
+          <p className="mt-1 text-sm">{previous.info_requested_message}</p>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-        <Field
-          label="Nombre completo"
-          name="full_name"
-          placeholder="Martina López"
-          defaultValue={previous?.full_name}
-          required
-        />
-        <div className="grid grid-cols-2 gap-4">
-          <Field
-            label="Fecha de nacimiento"
-            name="date_of_birth"
-            type="date"
-            defaultValue={previous?.date_of_birth}
-            required
-            onChange={(e) => setDateOfBirth(e.target.value)}
-          />
-          <Field label="DNI" name="national_id" placeholder="30111222" required />
-        </div>
-        {previous && (
-          <p className="-mt-3 text-xs text-muted-foreground">
-            Por seguridad no guardamos tu DNI en texto plano — volvé a escribirlo.
-          </p>
-        )}
-
-        <label className="block">
-          <span className="text-sm font-medium text-foreground/90">Foto de tu DNI (frente)</span>
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp,application/pdf"
-            onChange={handleIdDocumentChange}
-            className="mt-1 block w-full text-sm text-foreground file:mr-3 file:rounded-lg file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground hover:file:bg-surface-muted"
-          />
-          <p className="mt-1 text-xs text-muted-foreground">
-            Es privado — solo lo ve el equipo que revisa tu identidad, nunca se publica en tu perfil.
-          </p>
-          {idDocumentStatus === "uploading" && <p className="mt-1 text-xs text-accent">Subiendo...</p>}
-          {idDocumentStatus === "error" && <p className="mt-1 text-xs text-danger">{idDocumentError}</p>}
-          {idDocument && idDocumentStatus === "idle" && (
-            <p className="mt-1 text-xs text-verified">✓ {idDocument.filename} cargado</p>
-          )}
-          {previous?.evidence.some((e) => e.kind === "id_document") && !idDocument && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Ya habías subido un documento — subí uno de nuevo para reemplazarlo.
-            </p>
-          )}
-        </label>
-
-        <label className="block">
-          <span className="text-sm font-medium text-foreground/90">Selfie sosteniendo tu DNI</span>
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={handleSelfieChange}
-            className="mt-1 block w-full text-sm text-foreground file:mr-3 file:rounded-lg file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground hover:file:bg-surface-muted"
-          />
-          <p className="mt-1 text-xs text-muted-foreground">
-            Una foto tuya con el DNI al lado de tu cara, bien visible. También privada.
-          </p>
-          {selfieStatus === "uploading" && <p className="mt-1 text-xs text-accent">Subiendo...</p>}
-          {selfieStatus === "error" && <p className="mt-1 text-xs text-danger">{selfieError}</p>}
-          {selfieWithId && selfieStatus === "idle" && (
-            <p className="mt-1 text-xs text-verified">✓ {selfieWithId.filename} cargado</p>
-          )}
-          {previous?.evidence.some((e) => e.kind === "selfie_with_id") && !selfieWithId && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Ya habías subido una selfie — subí una de nuevo para reemplazarla.
-            </p>
-          )}
-        </label>
-
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Deporte" name="sport" placeholder="Judo" list={sports} defaultValue={previous?.sport} required />
-          <Field
-            label="Categoría"
-            name="category"
-            placeholder="Juvenil, Sub-20, Senior..."
-            defaultValue={previous?.category ?? undefined}
-          />
-        </div>
-        <Field
-          label="Disciplina / prueba / categoría de peso"
-          name="discipline"
-          placeholder="-63kg, estilos libres 100m, maratón..."
-          defaultValue={previous?.discipline ?? undefined}
-        />
-        <p className="-mt-3 text-xs text-muted-foreground">
-          La categoría es tu franja competitiva (edad o nivel); la disciplina es la prueba, estilo o
-          categoría de peso específica dentro de tu deporte.
-        </p>
-
-        <div className="grid grid-cols-2 gap-4">
-          <Field
-            label="Provincia"
-            name="province"
-            placeholder="Buenos Aires"
-            list={PROVINCES}
-            defaultValue={previous?.province ?? undefined}
-          />
-          <Field label="Ciudad" name="city" placeholder="Mar del Plata" defaultValue={previous?.city ?? undefined} />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <Field
-            label="Club"
-            name="club"
-            placeholder="Club Atlético River Plate"
-            defaultValue={previous?.club ?? undefined}
-          />
-          <Field
-            label="Federación"
-            name="federation"
-            placeholder="Federación Argentina de Judo"
-            defaultValue={previous?.federation ?? undefined}
-          />
+      <div className="mt-10 grid gap-10 md:grid-cols-[1fr_260px] md:gap-14">
+        <div className="mx-auto w-44 rotate-2 md:order-2 md:mx-0 md:w-full md:self-start md:sticky md:top-6" aria-hidden="true">
+          {preview}
+          <p className="mt-3 hidden text-center text-sm text-muted-foreground md:block">Así se va a ver en el álbum</p>
         </div>
 
-        <TextArea
-          label="Breve biografía"
-          name="bio"
-          rows={2}
-          placeholder="Una o dos frases sobre quién sos como atleta."
-          defaultValue={previous?.bio ?? undefined}
-        />
-        <TextArea
-          label="Tu historia deportiva"
-          name="story"
-          rows={4}
-          placeholder="Cómo empezaste, tu trayectoria, y por qué necesitás apoyo ahora."
-          defaultValue={previous?.story ?? undefined}
-        />
-        <TextArea
-          label="Enlaces de evidencia (uno por línea)"
-          name="evidence_links"
-          rows={3}
-          placeholder="Página de tu federación, ranking oficial, resultados de competencias, tu Instagram u otra red social donde se vea tu carrera deportiva..."
-          defaultValue={previous?.evidence
-            .filter((e) => e.kind === "federation_link")
-            .map((e) => e.s3_key)
-            .join("\n")}
-          required
-        />
-        <p className="-mt-3 text-xs text-muted-foreground">
-          Necesitamos al menos un enlace para poder verificar tu identidad y trayectoria — tu
-          Instagram u otra red social también sirve como evidencia.
-        </p>
-
-        {minor && (
-          <div className="space-y-4 rounded-lg border border-accent-soft bg-accent-soft/50 p-4">
-            <p className="text-sm text-foreground/90">
-              Como sos menor de edad, tu perfil público necesita la autorización de tu madre, padre o
-              tutor/a legal. Vos seguís manejando tu propia cuenta — esto es solo su consentimiento.
-            </p>
-            <Field
-              label="Email de tu madre, padre o tutor/a legal"
-              name="guardian_email"
-              type="email"
-              placeholder="ana@example.com"
-              defaultValue={previous?.guardian_email ?? undefined}
-              required={minor}
+        <form onSubmit={handleSubmit} className="space-y-6 md:order-1">
+          <label className="block">
+            <span className="field-label">Nombre y apellido</span>
+            <input
+              name="full_name"
+              required
+              autoComplete="name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Martina López"
+              className="input mt-1.5"
             />
-            <label className="flex items-start gap-2 text-sm text-foreground/90">
+          </label>
+
+          <div className="grid gap-6 sm:grid-cols-2">
+            <label className="block">
+              <span className="field-label">Deporte</span>
               <input
-                type="checkbox"
-                name="guardian_consent"
-                required={minor}
-                className="mt-0.5 size-4 rounded border-border text-accent focus:ring-accent"
+                name="sport"
+                required
+                list="sport-options"
+                value={sport}
+                onChange={(e) => setSport(e.target.value)}
+                placeholder="Judo"
+                className="input mt-1.5"
               />
-              Confirmo que mi madre, padre o tutor/a legal está al tanto de esta postulación y
-              autoriza la publicación de mi perfil.
+              <datalist id="sport-options">
+                {sports.map((option) => (
+                  <option key={option} value={option} />
+                ))}
+              </datalist>
+            </label>
+            <label className="block">
+              <span className="field-label">Fecha de nacimiento</span>
+              <input
+                name="date_of_birth"
+                type="date"
+                required
+                autoComplete="bday"
+                value={dateOfBirth}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+                className="input mt-1.5"
+              />
             </label>
           </div>
-        )}
 
-        {status === "error" && <p className="text-sm text-danger">{errorMessage}</p>}
+          <div className="grid gap-6 sm:grid-cols-2">
+            <label className="block">
+              <span className="field-label">Provincia</span>
+              <select
+                name="province"
+                value={province}
+                onChange={(e) => setProvince(e.target.value)}
+                className="input mt-1.5"
+              >
+                <option value="">Elegí tu provincia</option>
+                {PROVINCES.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="field-label">
+                Ciudad <span className="font-normal text-muted-foreground">(opcional)</span>
+              </span>
+              <input
+                name="city"
+                autoComplete="address-level2"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="Mar del Plata"
+                className="input mt-1.5"
+              />
+            </label>
+          </div>
 
-        <button
-          type="submit"
-          disabled={status === "submitting"}
-          className="w-full rounded-lg bg-accent px-4 py-2.5 font-medium text-accent-foreground transition hover:opacity-90 disabled:opacity-50"
-        >
-          {status === "submitting" ? "Enviando..." : "Enviar postulación"}
-        </button>
-      </form>
+          <div>
+            <label className="block">
+              <span className="field-label">Tu Instagram</span>
+              <span className="mt-1.5 flex items-stretch">
+                <span className="inline-flex items-center rounded-l-lg border border-r-0 border-border bg-surface-muted px-3 font-semibold text-muted-foreground">
+                  @
+                </span>
+                <input
+                  name="instagram_handle"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  value={instagram}
+                  onChange={(e) => setInstagram(e.target.value.replace(/^@/, ""))}
+                  placeholder="martinalopez.judo"
+                  className="input rounded-l-none"
+                />
+              </span>
+            </label>
+            <p className="field-hint">Lo usamos para confirmar que sos vos, y aparece en tu perfil.</p>
+
+            {showLink ? (
+              <label className="mt-4 block">
+                <span className="field-label">Link a tu federación, ranking o resultados</span>
+                <input
+                  name="link"
+                  type="url"
+                  inputMode="url"
+                  value={link}
+                  onChange={(e) => setLink(e.target.value)}
+                  placeholder="https://"
+                  className="input mt-1.5"
+                />
+              </label>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowLink(true)}
+                className="mt-2 text-sm font-semibold text-accent underline hover:no-underline"
+              >
+                ¿No tenés Instagram? Sumá otro link
+              </button>
+            )}
+          </div>
+
+          {minor && (
+            <fieldset className="space-y-4 rounded-xl bg-celeste-soft p-5">
+              <legend className="sr-only">Autorización de tu madre, padre o tutor/a</legend>
+              <p className="text-sm leading-relaxed">
+                Como sos menor de edad, tu perfil necesita la autorización de tu madre, padre o tutor/a. Vos seguís
+                manejando tu cuenta; esto es solo su permiso.
+              </p>
+              <label className="block">
+                <span className="field-label">Su email</span>
+                <input
+                  name="guardian_email"
+                  type="email"
+                  required
+                  defaultValue={previous?.guardian_email ?? undefined}
+                  placeholder="ana@email.com"
+                  className="input mt-1.5"
+                />
+              </label>
+              <label className="flex items-start gap-2.5 text-sm">
+                <input type="checkbox" name="guardian_consent" required className="mt-0.5 size-4 accent-[var(--accent)]" />
+                Mi madre, padre o tutor/a sabe que me estoy sumando y autoriza que se publique mi perfil.
+              </label>
+            </fieldset>
+          )}
+
+          {status === "error" && (
+            <p role="alert" className="rounded-lg bg-danger-soft px-4 py-3 text-sm text-danger">
+              {errorMessage}
+            </p>
+          )}
+
+          <div>
+            <button type="submit" disabled={status === "submitting"} className="btn btn-primary w-full py-3.5 text-base sm:w-auto sm:px-8">
+              {status === "submitting" ? "Enviando..." : previous ? "Enviar de nuevo" : "Enviar mi figurita"}
+            </button>
+            {sessionEmail && (
+              <p className="field-hint">
+                Te avisamos a <span className="font-semibold text-foreground">{sessionEmail}</span> cuando esté
+                publicada.
+              </p>
+            )}
+          </div>
+        </form>
+      </div>
     </div>
-  );
-}
-
-function Field({
-  label,
-  name,
-  type = "text",
-  required,
-  defaultValue,
-  placeholder,
-  list,
-  onChange,
-}: {
-  label: string;
-  name: string;
-  type?: string;
-  required?: boolean;
-  defaultValue?: string;
-  placeholder?: string;
-  list?: string[];
-  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-}) {
-  const listId = list ? `${name}-options` : undefined;
-  return (
-    <label className="block">
-      <span className="text-sm font-medium text-foreground/90">{label}</span>
-      <input
-        name={name}
-        type={type}
-        required={required}
-        defaultValue={defaultValue}
-        placeholder={placeholder}
-        list={listId}
-        onChange={onChange}
-        className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-      />
-      {list && (
-        <datalist id={listId}>
-          {list.map((option) => (
-            <option key={option} value={option} />
-          ))}
-        </datalist>
-      )}
-    </label>
-  );
-}
-
-function TextArea({
-  label,
-  name,
-  rows,
-  placeholder,
-  defaultValue,
-  required,
-}: {
-  label: string;
-  name: string;
-  rows: number;
-  placeholder?: string;
-  defaultValue?: string;
-  required?: boolean;
-}) {
-  return (
-    <label className="block">
-      <span className="text-sm font-medium text-foreground/90">{label}</span>
-      <textarea
-        name={name}
-        rows={rows}
-        placeholder={placeholder}
-        defaultValue={defaultValue}
-        required={required}
-        className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-      />
-    </label>
   );
 }

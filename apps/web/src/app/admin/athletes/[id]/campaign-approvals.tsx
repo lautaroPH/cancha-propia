@@ -40,7 +40,7 @@ export function CampaignApprovals({ campaigns, accessToken }: { campaigns: Campa
             <button
               disabled={busyId === c.id}
               onClick={() => run(c.id, () => adminApproveCampaign(accessToken, c.id), "No se pudo aprobar la campaña")}
-              className="mt-2 rounded-lg bg-verified px-3 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+              className="mt-2 btn btn-verified btn-sm"
             >
               {busyId === c.id ? "Aprobando..." : "Aprobar campaña"}
             </button>
@@ -51,7 +51,7 @@ export function CampaignApprovals({ campaigns, accessToken }: { campaigns: Campa
                 placeholder="Motivo de la pausa (opcional)"
                 value={pauseReason[c.id] ?? ""}
                 onChange={(e) => setPauseReason((prev) => ({ ...prev, [c.id]: e.target.value }))}
-                className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-2 py-1 text-xs text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+                className="input input-sm min-w-0 flex-1"
               />
               <button
                 disabled={busyId === c.id}
@@ -62,7 +62,7 @@ export function CampaignApprovals({ campaigns, accessToken }: { campaigns: Campa
                     "No se pudo pausar la campaña"
                   )
                 }
-                className="rounded-lg border border-border px-3 py-1 text-xs font-medium text-foreground hover:bg-surface-muted disabled:opacity-50"
+                className="btn btn-secondary btn-sm"
               >
                 {busyId === c.id ? "Pausando..." : "Pausar campaña"}
               </button>
@@ -72,7 +72,7 @@ export function CampaignApprovals({ campaigns, accessToken }: { campaigns: Campa
             <button
               disabled={busyId === c.id}
               onClick={() => run(c.id, () => adminResumeCampaign(accessToken, c.id), "No se pudo reanudar la campaña")}
-              className="mt-2 rounded-lg bg-accent px-3 py-1 text-xs font-medium text-accent-foreground hover:opacity-90 disabled:opacity-50"
+              className="mt-2 btn btn-primary btn-sm"
             >
               {busyId === c.id ? "Reanudando..." : "Reanudar campaña"}
             </button>

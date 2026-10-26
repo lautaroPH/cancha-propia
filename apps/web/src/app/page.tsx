@@ -1,166 +1,200 @@
 import Link from "next/link";
+import { listAthletes, type AthleteCard } from "@/lib/api";
+import { CheckIcon, Figurita, placeLabel } from "@/components/figurita";
 
-function StepCard({ number, title, description }: { number: string; title: string; description: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-surface p-5">
-      <span className="inline-flex size-8 items-center justify-center rounded-full bg-accent-soft text-sm font-bold text-accent-strong">
-        {number}
-      </span>
-      <h3 className="mt-3 font-semibold text-foreground">{title}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-    </div>
-  );
+async function loadRecent(): Promise<AthleteCard[]> {
+  // The landing must still render if the API is down — the album just stays empty.
+  try {
+    return await listAthletes();
+  } catch {
+    return [];
+  }
 }
 
-function BadgeExplainer({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="flex gap-3">
-      <span className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-verified-soft text-verified">
-        <svg viewBox="0 0 20 20" fill="currentColor" className="size-3.5">
-          <path
-            fillRule="evenodd"
-            d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
-            clipRule="evenodd"
-          />
-        </svg>
-      </span>
-      <div>
-        <h4 className="font-medium text-foreground">{title}</h4>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
-    </div>
-  );
+function isFullyVerified(a: AthleteCard) {
+  return a.identity_verified && a.career_verified && a.competition_verified;
 }
 
-export default function LandingPage() {
+const fan = ["-rotate-3 translate-y-6", "z-10 -translate-y-2", "rotate-3 translate-y-8"];
+
+export default async function LandingPage() {
+  const athletes = await loadRecent();
+  const stack = athletes.slice(0, 3);
+
   return (
     <div>
-      <section className="border-b border-border bg-surface">
-        <div className="mx-auto max-w-5xl px-6 py-16 sm:py-20">
-          <p className="text-sm font-semibold tracking-wide text-accent uppercase">Codeportistas</p>
-          <h1 className="mt-3 max-w-2xl text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-            Encontrá y apoyá a atletas argentinos que necesitan una mano para competir
-          </h1>
-          <p className="mt-5 max-w-2xl text-lg text-muted-foreground">
-            Muchos deportistas de alto rendimiento financian viajes, equipamiento e inscripciones a
-            competencias con sus propios medios. Codeportistas reúne sus perfiles verificados en un solo
-            lugar para que cualquiera pueda conocer su historia y decidir ayudarlos — directo, sin
-            intermediarios.
-          </p>
-          <form action="/athletes" method="get" className="mt-8 max-w-lg">
-            <div className="flex items-center gap-2 rounded-full border border-border bg-background py-1.5 pr-1.5 pl-4 shadow-sm transition focus-within:border-accent">
-              <svg
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className="size-4 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z"
-                  clipRule="evenodd"
-                />
-              </svg>
+      <section className="overflow-hidden bg-celeste text-on-celeste">
+        <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 pt-10 pb-16 sm:px-6 lg:grid-cols-[1.1fr_1fr] lg:pt-16 lg:pb-24">
+          <div>
+            <h1 className="text-[3.25rem] sm:text-[4.5rem] lg:text-[5.5rem]">
+              Bancá a los atletas que te representan
+            </h1>
+            <p className="mt-5 max-w-xl text-lg leading-relaxed text-on-celeste/85">
+              Deportistas argentinos que se pagan sus viajes, su equipo y sus inscripciones. Conocé su historia y
+              ayudalos directo, sin intermediarios.
+            </p>
+
+            <form action="/athletes" method="get" className="mt-8 flex max-w-lg gap-2">
+              <label htmlFor="hero-search" className="sr-only">
+                Buscar atletas
+              </label>
               <input
+                id="hero-search"
                 type="search"
                 name="q"
-                placeholder="Buscá por deporte, provincia o nombre..."
-                className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                placeholder="Deporte, provincia o nombre"
+                className="input min-w-0 flex-1 border-transparent"
               />
-              <button
-                type="submit"
-                className="shrink-0 rounded-full bg-accent px-4 py-1.5 text-sm font-medium text-accent-foreground hover:opacity-90"
-              >
+              <button type="submit" className="btn bg-ink text-on-ink hover:opacity-90">
                 Buscar
               </button>
-            </div>
-          </form>
-          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
-            <Link href="/athletes" className="font-medium text-accent hover:underline">
-              Ver todos los atletas →
-            </Link>
-            <Link href="/apply" className="font-medium text-foreground hover:text-accent">
-              Soy atleta, quiero postularme →
-            </Link>
+            </form>
+
+            <p className="mt-6 text-sm">
+              ¿Sos atleta?{" "}
+              <Link href="/apply" className="font-bold underline hover:no-underline">
+                Armá tu figurita en un par de minutos
+              </Link>
+            </p>
+          </div>
+
+          <div className="relative mx-auto flex w-full max-w-xl justify-center" aria-hidden={stack.length === 0}>
+            {stack.length > 0 ? (
+              <div className="grid w-full grid-cols-3 items-start gap-2 sm:gap-3">
+                {stack.map((a, i) => (
+                  <Link
+                    key={a.slug}
+                    href={`/athletes/${a.slug}`}
+                    className={`figurita-link block ${fan[i]}`}
+                  >
+                    <Figurita
+                      name={a.full_name}
+                      sport={a.sport}
+                      place={placeLabel(a)}
+                      photoUrl={a.photo_url}
+                      verified={isFullyVerified(a)}
+                      size="sm"
+                    />
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="w-56 rotate-3">
+                <Figurita name="Tu nombre acá" sport="Tu deporte" place="Tu provincia" size="md" />
+                <p className="mt-3 text-center text-sm font-semibold">Ejemplo</p>
+              </div>
+            )}
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-5xl px-6 py-16">
-        <h2 className="text-2xl font-bold text-foreground">Cómo funciona</h2>
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StepCard
-            number="1"
-            title="Buscá un atleta"
-            description="Filtrá por deporte, provincia o competencias próximas y conocé su historia, sus logros y sus objetivos."
+      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+        <h2 className="display text-[2.5rem] sm:text-[3.25rem]">Cómo funciona</h2>
+        <dl className="mt-8 grid gap-x-10 border-t border-border sm:grid-cols-3">
+          <HowItWorks
+            term="Encontrá"
+            detail="Buscá por deporte, provincia o competencias próximas. Cada atleta tiene su figurita en el álbum."
           />
-          <StepCard
-            number="2"
-            title="Revisá su verificación"
-            description="Cada perfil muestra qué datos confirmó el equipo de Codeportistas: identidad, trayectoria deportiva y participación en competencias."
+          <HowItWorks
+            term="Conocé"
+            detail="Su historia, sus logros, sus publicaciones de Instagram y lo que necesita para la próxima competencia."
           />
-          <StepCard
-            number="3"
-            title="Aportá directo a la persona"
-            description="Si decidís colaborar, lo hacés por alias o CBU directo al atleta. Nosotros no procesamos ni retenemos el dinero en ningún momento."
+          <HowItWorks
+            term="Bancá"
+            detail="Si decidís ayudar, transferís directo a su alias o participás de su rifa. La plata nunca pasa por nosotros."
           />
+        </dl>
+      </section>
+
+      {athletes.length > 0 && (
+        <section className="bg-surface-muted">
+          <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <h2 className="display text-[2.5rem] sm:text-[3.25rem]">Últimos en el álbum</h2>
+              <Link href="/athletes" className="font-semibold text-accent hover:underline">
+                Ver todos los atletas
+              </Link>
+            </div>
+            <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">
+              {athletes.slice(0, 8).map((a) => (
+                <Link key={a.slug} href={`/athletes/${a.slug}`} className="figurita-link block">
+                  <Figurita
+                    name={a.full_name}
+                    sport={a.sport}
+                    place={placeLabel(a)}
+                    photoUrl={a.photo_url}
+                    verified={isFullyVerified(a)}
+                    campaign={a.has_active_campaign}
+                    size="sm"
+                  />
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="bg-ink text-on-ink">
+        <div className="mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-2">
+          <div>
+            <h2 className="display text-[2.5rem] sm:text-[3.25rem]">Nunca tocamos el dinero</h2>
+            <p className="mt-5 max-w-lg leading-relaxed text-on-ink/80">
+              Codeportistas no es una billetera ni un procesador de pagos. Cuando apoyás a un atleta, la
+              transferencia va de tu cuenta a la suya, por el alias o CBU que publica en su perfil. Nuestro trabajo
+              es que encuentres historias reales y que sepas que la persona es quien dice ser.
+            </p>
+          </div>
+          <div>
+            <h3 className="text-lg font-bold">Qué revisa nuestro equipo</h3>
+            <p className="mt-2 text-sm text-on-ink/70">
+              Cada perfil pasa por una revisión manual antes de publicarse. Puede mostrar hasta tres sellos:
+            </p>
+            <ul className="mt-6 space-y-5">
+              <Seal title="Identidad" detail="Que la persona detrás del perfil es quien dice ser, por sus redes y referencias." />
+              <Seal title="Trayectoria" detail="Su vínculo con el club, la federación o la disciplina que declara." />
+              <Seal title="Competencia" detail="Que compite o fue convocada a la competencia que menciona." />
+            </ul>
+          </div>
         </div>
       </section>
 
-      <section className="border-t border-border bg-surface">
-        <div className="mx-auto max-w-5xl px-6 py-16">
-          <h2 className="text-2xl font-bold text-foreground">Nunca tocamos el dinero</h2>
-          <p className="mt-3 max-w-2xl text-muted-foreground">
-            Codeportistas es una plataforma de descubrimiento y confianza, no una billetera ni un
-            procesador de pagos. No recibimos, retenemos ni transferimos fondos. Cuando decidís apoyar a
-            un atleta, la transferencia va directo de tu cuenta a la de él o ella, por los medios que el
-            propio atleta publica en su perfil (alias, CBU). Nuestro trabajo es ayudarte a encontrar
-            historias reales y verificar que la persona detrás del perfil es quien dice ser.
-          </p>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-5xl px-6 py-16">
-        <h2 className="text-2xl font-bold text-foreground">Qué significa un perfil verificado</h2>
-        <p className="mt-3 max-w-2xl text-muted-foreground">
-          Antes de publicarse, cada postulación pasa por una revisión manual. Un perfil puede mostrar
-          hasta tres insignias independientes, según lo que el equipo pudo confirmar:
-        </p>
-        <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
-          <BadgeExplainer
-            title="Identidad"
-            description="Confirmamos que la persona detrás del perfil es quien dice ser."
-          />
-          <BadgeExplainer
-            title="Trayectoria deportiva"
-            description="Confirmamos su vínculo con el club, federación o disciplina que declara."
-          />
-          <BadgeExplainer
-            title="Participación en competencias"
-            description="Confirmamos que compite o fue convocado a la competencia que menciona."
-          />
-        </div>
-        <p className="mt-6 text-sm text-muted-foreground">
-          Los perfiles se revisan periódicamente para mantener la información al día, y cualquiera puede
-          reportar un perfil que le parezca sospechoso.
-        </p>
-      </section>
-
-      <section className="border-t border-border bg-surface">
-        <div className="mx-auto max-w-5xl px-6 py-16 text-center">
-          <h2 className="text-2xl font-bold text-foreground">¿Sos un atleta de alto rendimiento?</h2>
-          <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-            Publicá tu perfil y contá tu historia. Es gratis y la revisión de tu postulación está a cargo
-            de nuestro equipo.
-          </p>
-          <Link
-            href="/apply"
-            className="mt-6 inline-block rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground hover:opacity-90"
-          >
-            Postularme como atleta
+      <section className="bg-celeste text-on-celeste">
+        <div className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-4 py-16 sm:px-6 sm:py-20 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="display text-[2.5rem] sm:text-[3.25rem]">¿Sos atleta?</h2>
+            <p className="mt-3 max-w-lg text-lg text-on-celeste/85">
+              Creá tu cuenta con tu email, contanos tu deporte y tu Instagram, y listo. Lo demás lo completás cuando
+              quieras. Es gratis.
+            </p>
+          </div>
+          <Link href="/apply" className="btn bg-ink px-6 py-3 text-base text-on-ink hover:opacity-90">
+            Armá tu figurita
           </Link>
         </div>
       </section>
     </div>
+  );
+}
+
+function HowItWorks({ term, detail }: { term: string; detail: string }) {
+  return (
+    <div className="border-b border-border py-6 sm:border-b-0">
+      <dt className="display text-[2rem] text-accent">{term}</dt>
+      <dd className="mt-2 leading-relaxed text-muted-foreground">{detail}</dd>
+    </div>
+  );
+}
+
+function Seal({ title, detail }: { title: string; detail: string }) {
+  return (
+    <li className="flex gap-3">
+      <span className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-celeste text-on-celeste">
+        <CheckIcon className="size-3.5" />
+      </span>
+      <div>
+        <p className="font-semibold">{title}</p>
+        <p className="text-sm text-on-ink/70">{detail}</p>
+      </div>
+    </li>
   );
 }

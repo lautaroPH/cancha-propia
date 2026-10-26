@@ -1,9 +1,18 @@
+import re
 import uuid
 from datetime import date
 from datetime import date as _date  # avoids self-shadowing on the `date` field below
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+
+MAX_INSTAGRAM_POSTS = 6
+
+_INSTAGRAM_HANDLE_RE = re.compile(r"^[A-Za-z0-9._]{1,30}$")
+# Post, reel or IGTV permalink — the only shapes Instagram's /embed endpoint serves.
+_INSTAGRAM_POST_RE = re.compile(
+    r"^https?://(?:www\.)?instagram\.com/(?:[A-Za-z0-9._]+/)?(p|reel|reels|tv)/([A-Za-z0-9_-]+)/?(?:[?#].*)?$"
+)
 
 
 def _is_http_url(value: str) -> bool:
@@ -13,42 +22,55 @@ def _is_http_url(value: str) -> bool:
     return value.startswith("http://") or value.startswith("https://")
 
 
+def normalize_instagram_handle(value: str | None) -> str | None:
+    """Accepts "@martina", "martina" or a pasted profile URL; stores the bare handle."""
+    if value is None:
+        return None
+    handle = value.strip()
+    handle = re.sub(r"^https?://(?:www\.)?instagram\.com/", "", handle).split("?")[0].strip("/")
+    handle = handle.lstrip("@")
+    if not handle:
+        return None
+    if not _INSTAGRAM_HANDLE_RE.match(handle):
+        raise ValueError("instagram_handle must be a valid Instagram username")
+    return handle
+
+
+def normalize_instagram_post(url: str) -> str:
+    """Canonical permalink, so the frontend can build the /embed URL without
+    re-parsing whatever tracking params the share sheet appended."""
+    match = _INSTAGRAM_POST_RE.match(url.strip())
+    if not match:
+        raise ValueError("instagram_posts must be Instagram post or reel links")
+    kind, code = match.groups()
+    kind = "reel" if kind == "reels" else kind
+    return f"https://www.instagram.com/{kind}/{code}/"
+
+
 class ApplicationCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    full_name: str
+    full_name: str = Field(min_length=1)
     date_of_birth: date
-    national_id: str = Field(min_length=4)  # hashed on write, never stored in plaintext
 
     province: str | None = None
     city: str | None = None
-    sport: str
-    discipline: str | None = None
-    category: str | None = None
-    club: str | None = None
-    federation: str | None = None
-    federation_license_number: str | None = None
+    sport: str = Field(min_length=1)
 
+    instagram_handle: str | None = None
     bio: str | None = None
-    story: str | None = None
     # No contact_email here on purpose — it's derived server-side from the
     # authenticated session, always, even for a minor (they hold their own
     # account — see plan discussion on simplifying the guardian flow).
 
-    evidence_links: list[str] = Field(default_factory=list)  # federation/ranking/result URLs submitted at intake
-
-    # Uploaded via POST /uploads/evidence-url beforehand — this just registers
-    # the resulting private S3 keys against the application (plan §4: identity
-    # badge requires national ID + a document + a selfie-with-ID at application time).
-    id_document_s3_key: str = Field(min_length=1)
-    id_document_filename: str | None = None
-    selfie_with_id_s3_key: str = Field(min_length=1)
-    selfie_with_id_filename: str | None = None
+    evidence_links: list[str] = Field(default_factory=list)  # federation/ranking/result URLs, optional
 
     # A minor doesn't manage a separate guardian account — this is just the
     # legally necessary bit: who authorized the profile, captured once here.
     guardian_email: EmailStr | None = None
     guardian_consent: bool = False
+
+    _normalize_handle = field_validator("instagram_handle")(normalize_instagram_handle)
 
     @model_validator(mode="after")
     def guardian_consent_required_if_minor(self) -> "ApplicationCreate":
@@ -61,14 +83,13 @@ class ApplicationCreate(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def evidence_required(self) -> "ApplicationCreate":
-        # Without at least one link there's nothing for an admin to verify
-        # identity/career against — an empty application can't be reviewed.
-        if not any(link.strip() for link in self.evidence_links):
-            raise ValueError(
-                "At least one evidence link is required (federation page, ranking, results, social media, etc.)"
-            )
-        if any(link.strip() and not _is_http_url(link.strip()) for link in self.evidence_links):
+    def something_to_verify(self) -> "ApplicationCreate":
+        # The reviewer verifies the athlete against their public footprint —
+        # without an Instagram or at least one link there's nothing to check.
+        self.evidence_links = [link.strip() for link in self.evidence_links if link.strip()]
+        if not self.instagram_handle and not self.evidence_links:
+            raise ValueError("Add your Instagram or at least one link (federation, ranking, results...)")
+        if any(not _is_http_url(link) for link in self.evidence_links):
             raise ValueError("Evidence links must be http:// or https:// URLs")
         return self
 
@@ -145,6 +166,7 @@ class AthleteProfile(BaseModel):
     competition_verified: bool
 
     instagram_handle: str | None
+    instagram_posts: list[str]
     whatsapp_number: str | None
     alias: str | None
     cbu: str | None
@@ -279,14 +301,23 @@ class AchievementIn(BaseModel):
 
 
 class AthleteSelfUpdate(BaseModel):
-    """Free-edit fields only — see plan §2 for what requires re-review instead."""
+    """Everything the athlete owns on their profile. Name and date of birth stay
+    out — those are what the reviewer verified, so they don't change silently."""
 
+    sport: str | None = Field(default=None, min_length=1)
+    discipline: str | None = None
+    category: str | None = None
+    province: str | None = None
+    city: str | None = None
+    club: str | None = None
+    federation: str | None = None
     bio: str | None = None
     story: str | None = None
     achievements: list[AchievementIn] | None = None
     photo_s3_key: str | None = None
     instagram_handle: str | None = None
     instagram_public: bool | None = None
+    instagram_posts: list[str] | None = Field(default=None, max_length=MAX_INSTAGRAM_POSTS)
     whatsapp_number: str | None = None
     whatsapp_public: bool | None = None
     alias: str | None = None
@@ -297,6 +328,16 @@ class AthleteSelfUpdate(BaseModel):
     raffle_url: str | None = None
     raffle_description: str | None = None
     raffle_public: bool | None = None
+
+    _normalize_handle = field_validator("instagram_handle")(normalize_instagram_handle)
+
+    @field_validator("instagram_posts")
+    @classmethod
+    def _normalize_posts(cls, posts: list[str] | None) -> list[str] | None:
+        if posts is None:
+            return None
+        normalized = [normalize_instagram_post(p) for p in posts if p.strip()]
+        return list(dict.fromkeys(normalized))  # drop duplicates, keep the athlete's order
 
     @model_validator(mode="after")
     def public_toggles_need_a_value(self) -> "AthleteSelfUpdate":

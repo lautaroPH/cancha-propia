@@ -6,6 +6,8 @@ import { AdminAccessDenied } from "@/components/admin-access-denied";
 import { CampaignApprovals } from "./campaign-approvals";
 import { ReviewActions } from "./review-actions";
 import { ViewEvidenceButton } from "./view-evidence-button";
+import { StatusPill } from "@/components/admin-nav";
+import { InstagramIcon } from "@/components/instagram-embed";
 
 export default async function AdminAthleteDetailPage(props: PageProps<"/admin/athletes/[id]">) {
   const { id } = await props.params;
@@ -27,18 +29,16 @@ export default async function AdminAthleteDetailPage(props: PageProps<"/admin/at
   const auditLog = await adminAuditLog(session.access_token, id);
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-12">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{athlete.full_name}</h1>
+          <h1 className="text-[2.5rem] sm:text-[3rem]">{athlete.full_name}</h1>
           <p className="mt-1 text-muted-foreground">
             {athlete.sport}
             {athlete.discipline ? ` · ${athlete.discipline}` : ""} · {athlete.province ?? "—"}
           </p>
         </div>
-        <span className="inline-flex items-center rounded-full bg-surface-muted px-3 py-1 text-sm font-medium text-muted-foreground">
-          {athlete.status}
-        </span>
+        <StatusPill status={athlete.status} />
       </div>
 
       {athlete.is_minor && (
@@ -74,44 +74,67 @@ export default async function AdminAthleteDetailPage(props: PageProps<"/admin/at
 
       {athlete.story && (
         <section className="mt-6">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase">Historia</h2>
+          <h2 className="group-title text-[1.125rem]">Historia</h2>
           <p className="mt-1 whitespace-pre-line text-foreground/90">{athlete.story}</p>
         </section>
       )}
 
-      {athlete.evidence.length > 0 && (
-        <section className="mt-6">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase">Evidencia</h2>
-          <ul className="mt-2 space-y-1">
-            {athlete.evidence.map((e) => (
-              <li key={e.id} className="text-sm">
-                <span className="text-muted-foreground">[{e.kind}]</span>{" "}
-                {e.kind === "federation_link" ? (
-                  <a href={e.s3_key} target="_blank" rel="noreferrer" className="text-accent hover:underline">
-                    {e.s3_key}
-                  </a>
-                ) : (
-                  <>
-                    <span className="text-foreground">{e.original_filename ?? "documento"}</span>{" "}
-                    <ViewEvidenceButton athleteId={athlete.id} evidenceId={e.id} accessToken={session.access_token} />
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <section className="mt-8 rounded-xl bg-celeste-soft p-5">
+        <h2 className="group-title text-[1.125rem]">Para verificar</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          No se pide DNI: verificá contra su Instagram y los links que dejó.
+        </p>
+        <ul className="mt-4 space-y-2 text-sm">
+          {athlete.instagram_handle ? (
+            <li>
+              <a
+                href={`https://instagram.com/${athlete.instagram_handle}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 font-semibold text-accent underline hover:no-underline"
+              >
+                <InstagramIcon className="size-4" />@{athlete.instagram_handle}
+              </a>
+            </li>
+          ) : (
+            <li className="text-muted-foreground">Sin Instagram.</li>
+          )}
+          {athlete.instagram_posts.map((url) => (
+            <li key={url}>
+              <a href={url} target="_blank" rel="noreferrer" className="break-all text-accent underline hover:no-underline">
+                {url}
+              </a>{" "}
+              <span className="text-muted-foreground">(publicación destacada)</span>
+            </li>
+          ))}
+          {athlete.evidence.map((e) => (
+            <li key={e.id} className="break-all">
+              {e.kind === "federation_link" ? (
+                <a href={e.s3_key} target="_blank" rel="noreferrer" className="text-accent underline hover:no-underline">
+                  {e.s3_key}
+                </a>
+              ) : (
+                <>
+                  <span className="text-muted-foreground">Documento anterior ({e.kind}):</span>{" "}
+                  <span>{e.original_filename ?? "documento"}</span>{" "}
+                  <ViewEvidenceButton athleteId={athlete.id} evidenceId={e.id} accessToken={session.access_token} />
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      </section>
 
       {athlete.admin_notes && (
         <section className="mt-6">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase">Notas internas</h2>
+          <h2 className="group-title text-[1.125rem]">Notas internas</h2>
           <p className="mt-1 whitespace-pre-line text-sm text-foreground/90">{athlete.admin_notes}</p>
         </section>
       )}
 
       {athlete.campaigns.length > 0 && (
         <section className="mt-6">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase">Campañas</h2>
+          <h2 className="group-title text-[1.125rem]">Campañas</h2>
           <CampaignApprovals campaigns={athlete.campaigns} accessToken={session.access_token} />
         </section>
       )}
@@ -120,11 +143,11 @@ export default async function AdminAthleteDetailPage(props: PageProps<"/admin/at
 
       {auditLog.length > 0 && (
         <section className="mt-10 border-t border-border pt-6">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase">Historial</h2>
+          <h2 className="group-title text-[1.125rem]">Historial</h2>
           <ul className="mt-2 space-y-1.5 text-sm">
             {auditLog.map((entry, i) => (
               <li key={i} className="text-muted-foreground">
-                <span className="font-mono text-xs">{new Date(entry.created_at).toLocaleString("es-AR")}</span>{" "}
+                <span className="text-xs">{new Date(entry.created_at).toLocaleString("es-AR")}</span>{" "}
                 — <span className="text-foreground">{entry.action}</span> por {entry.admin_email}
               </li>
             ))}

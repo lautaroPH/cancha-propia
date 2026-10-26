@@ -6,16 +6,16 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 const COLORS = {
-  background: "#131210",
-  surface: "#1c1a16",
-  foreground: "#edeae2",
-  muted: "#a8a399",
-  border: "#34312a",
-  accent: "#e37e3f",
-  accentForeground: "#1a1200",
-  accentSoft: "#3a2718",
-  verified: "#6fcb9f",
-  verifiedSoft: "#17301f",
+  background: "#74acdf",
+  surface: "#ffffff",
+  foreground: "#0e1b33",
+  muted: "#26405f",
+  border: "#0e1b33",
+  accent: "#0e1b33",
+  accentForeground: "#ffffff",
+  accentSoft: "#f6b40e",
+  verified: "#1b7a4b",
+  verifiedSoft: "#dcf1e4",
 };
 
 function money(amount: number) {

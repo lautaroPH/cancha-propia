@@ -58,6 +58,7 @@ def _profile(athlete: Athlete) -> AthleteProfile:
         career_verified=athlete.career_verified,
         competition_verified=athlete.competition_verified,
         instagram_handle=athlete.instagram_handle if athlete.instagram_public else None,
+        instagram_posts=athlete.instagram_posts or [],
         whatsapp_number=athlete.whatsapp_number if athlete.whatsapp_public else None,
         alias=athlete.alias if athlete.alias_public else None,
         cbu=athlete.cbu if athlete.alias_public else None,

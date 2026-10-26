@@ -41,13 +41,13 @@ export function ReviewActions({
 
   return (
     <section className="mt-10 space-y-6 border-t border-border pt-6">
-      <h2 className="text-sm font-semibold text-muted-foreground uppercase">Acciones</h2>
+      <h2 className="group-title text-[1.125rem]">Acciones</h2>
       {error && <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
       {status === "pending" && (
         <>
           <div className="rounded-lg border border-verified-soft bg-verified-soft/40 p-4">
-            <p className="text-sm font-medium text-foreground">Aprobar</p>
+            <p className="text-sm font-semibold text-foreground">Aprobar</p>
             <div className="mt-2 flex flex-wrap gap-4 text-sm">
               <label className="flex items-center gap-1.5">
                 <input type="checkbox" checked={identityVerified} onChange={(e) => setIdentityVerified(e.target.checked)} />
@@ -71,7 +71,7 @@ export function ReviewActions({
               value={approveNotes}
               onChange={(e) => setApproveNotes(e.target.value)}
               rows={2}
-              className="mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              className="input input-sm mt-2 w-full"
             />
             <button
               disabled={busy}
@@ -85,43 +85,43 @@ export function ReviewActions({
                   })
                 )
               }
-              className="mt-3 rounded-lg bg-verified px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              className="mt-3 btn btn-verified btn-sm"
             >
               Aprobar y publicar
             </button>
           </div>
 
           <div>
-            <p className="text-sm font-medium text-foreground">Rechazar</p>
+            <p className="text-sm font-semibold text-foreground">Rechazar</p>
             <textarea
               placeholder="Motivo del rechazo"
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               rows={2}
-              className="mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              className="input input-sm mt-2 w-full"
             />
             <button
               disabled={busy || !rejectReason}
               onClick={() => run(() => adminReject(accessToken, athleteId, rejectReason))}
-              className="mt-2 rounded-lg border border-danger px-4 py-1.5 text-sm font-medium text-danger hover:bg-danger-soft disabled:opacity-50"
+              className="mt-2 btn btn-danger btn-sm"
             >
               Rechazar
             </button>
           </div>
 
           <div>
-            <p className="text-sm font-medium text-foreground">Pedir más información</p>
+            <p className="text-sm font-semibold text-foreground">Pedir más información</p>
             <textarea
               placeholder="Qué necesitás que agregue"
               value={infoMessage}
               onChange={(e) => setInfoMessage(e.target.value)}
               rows={2}
-              className="mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              className="input input-sm mt-2 w-full"
             />
             <button
               disabled={busy || !infoMessage}
               onClick={() => run(() => adminRequestInfo(accessToken, athleteId, infoMessage))}
-              className="mt-2 rounded-lg border border-border px-4 py-1.5 text-sm font-medium text-foreground hover:bg-surface-muted disabled:opacity-50"
+              className="mt-2 btn btn-secondary btn-sm"
             >
               Enviar pedido
             </button>
@@ -131,18 +131,18 @@ export function ReviewActions({
 
       {status === "active" && (
         <div>
-          <p className="text-sm font-medium text-foreground">Suspender</p>
+          <p className="text-sm font-semibold text-foreground">Suspender</p>
           <textarea
             placeholder="Motivo de la suspensión"
             value={suspendReason}
             onChange={(e) => setSuspendReason(e.target.value)}
             rows={2}
-            className="mt-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+            className="input input-sm mt-2 w-full"
           />
           <button
             disabled={busy || !suspendReason}
             onClick={() => run(() => adminSuspend(accessToken, athleteId, suspendReason))}
-            className="mt-2 rounded-lg border border-danger px-4 py-1.5 text-sm font-medium text-danger hover:bg-danger-soft disabled:opacity-50"
+            className="mt-2 btn btn-danger btn-sm"
           >
             Suspender
           </button>
@@ -153,7 +153,7 @@ export function ReviewActions({
         <button
           disabled={busy}
           onClick={() => run(() => adminReactivate(accessToken, athleteId))}
-          className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-accent-foreground hover:opacity-90 disabled:opacity-50"
+          className="btn btn-primary btn-sm"
         >
           Reactivar
         </button>

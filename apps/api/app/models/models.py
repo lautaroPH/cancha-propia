@@ -74,6 +74,9 @@ class Athlete(Base):
 
     instagram_handle: Mapped[str | None] = mapped_column(Text, nullable=True)
     instagram_public: Mapped[bool] = mapped_column(default=False)
+    # Permalinks the athlete picked to feature — rendered through Instagram's
+    # own embed, so there's no scraping or API token involved.
+    instagram_posts: Mapped[list] = mapped_column(JSONB, default=list)
     whatsapp_number: Mapped[str | None] = mapped_column(Text, nullable=True)
     whatsapp_public: Mapped[bool] = mapped_column(default=False)
     alias: Mapped[str | None] = mapped_column(Text, nullable=True)

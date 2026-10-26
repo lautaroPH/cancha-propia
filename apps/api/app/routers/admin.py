@@ -88,6 +88,7 @@ def _detail(athlete: Athlete, evidence: list[EvidenceFile]) -> AthleteAdminDetai
         next_review_due=athlete.next_review_due,
         instagram_handle=athlete.instagram_handle,
         instagram_public=athlete.instagram_public,
+        instagram_posts=athlete.instagram_posts or [],
         whatsapp_number=athlete.whatsapp_number,
         whatsapp_public=athlete.whatsapp_public,
         alias=athlete.alias,

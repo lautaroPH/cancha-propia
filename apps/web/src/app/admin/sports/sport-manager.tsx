@@ -46,12 +46,12 @@ export function SportManager({ sports, accessToken }: { sports: SportOption[]; a
           placeholder="Nuevo deporte (ej: Ajedrez)"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="flex-1 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+          className="input input-sm flex-1"
         />
         <button
           type="submit"
           disabled={busy || !name.trim()}
-          className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-accent-foreground hover:opacity-90 disabled:opacity-50"
+          className="btn btn-primary btn-sm"
         >
           Agregar
         </button>
@@ -67,7 +67,7 @@ export function SportManager({ sports, accessToken }: { sports: SportOption[]; a
             <button
               disabled={busy}
               onClick={() => toggle(s)}
-              className="rounded-lg border border-border px-3 py-1 text-xs font-medium text-foreground hover:bg-surface-muted disabled:opacity-50"
+              className="btn btn-secondary btn-sm"
             >
               {s.active ? "Desactivar" : "Activar"}
             </button>

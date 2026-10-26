@@ -3,14 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { adminListApplications, ApiError } from "@/lib/api";
 import { AdminAccessDenied } from "@/components/admin-access-denied";
-
-function StatusPill({ status }: { status: string }) {
-  return (
-    <span className="inline-flex items-center rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-      {status}
-    </span>
-  );
-}
+import { StatusPill } from "@/components/admin-nav";
 
 export default async function AdminQueuePage() {
   const supabase = await createClient();
@@ -30,25 +23,11 @@ export default async function AdminQueuePage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-12">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
+      <div className="mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Postulaciones pendientes</h1>
+          <h1 className="text-[2.5rem] sm:text-[3rem]">Postulaciones pendientes</h1>
           <p className="mt-1 text-sm text-muted-foreground">{session.user.email}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
-          <Link href="/admin/reports" className="text-accent hover:underline">
-            Reportes →
-          </Link>
-          <Link href="/admin/campaigns/expiring" className="text-accent hover:underline">
-            Campañas vencidas →
-          </Link>
-          <Link href="/admin/athletes" className="text-accent hover:underline">
-            Ver todos los atletas →
-          </Link>
-          <Link href="/admin/sports" className="text-accent hover:underline">
-            Deportes →
-          </Link>
         </div>
       </div>
 

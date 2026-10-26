@@ -97,7 +97,7 @@ export function DevQuickSwitch() {
 
   return (
     <div className="mt-10 rounded-lg border border-dashed border-accent p-4">
-      <p className="text-xs font-semibold tracking-wide text-accent uppercase">Dev: cambio rápido de cuenta</p>
+      <p className="text-sm font-semibold text-accent">Dev: cambio rápido de cuenta</p>
       <p className="mt-1 text-xs text-muted-foreground">
         Solo en desarrollo. Un click te loguea directo, sin email ni magic link.
       </p>
@@ -121,11 +121,11 @@ export function DevQuickSwitch() {
           value={newEmail}
           onChange={(e) => setNewEmail(e.target.value)}
           placeholder="nuevo-email-de-prueba@example.com"
-          className="flex-1 rounded-lg border border-border bg-surface px-2 py-1 text-xs text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+          className="input input-sm flex-1 text-xs"
         />
         <button
           type="submit"
-          className="rounded-lg border border-border px-3 py-1 text-xs font-medium text-foreground hover:bg-surface-muted"
+          className="btn btn-secondary btn-sm"
         >
           Agregar
         </button>

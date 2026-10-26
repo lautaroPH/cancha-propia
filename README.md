@@ -38,7 +38,7 @@ doesn't wire up uploads yet, this just gets the bucket ready for Phase 2.
 cd apps/api
 python -m venv .venv
 .venv/Scripts/pip install -r requirements-dev.txt   # includes test deps
-cp .env.example .env   # fill in DATABASE_URL, AWS keys, SECURITY_PEPPER
+cp .env.example .env   # fill in DATABASE_URL, AWS keys
 .venv/Scripts/python -m app.seed                     # publishes sample athlete "martina-lopez"
 .venv/Scripts/uvicorn app.main:app --reload --port 8000
 ```

@@ -15,7 +15,7 @@ export function ResolveReportButton({ reportId, accessToken }: { reportId: strin
     return (
       <button
         onClick={() => setOpen(true)}
-        className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted"
+        className="btn btn-secondary btn-sm"
       >
         Resolver
       </button>
@@ -43,13 +43,13 @@ export function ResolveReportButton({ reportId, accessToken }: { reportId: strin
         value={note}
         onChange={(e) => setNote(e.target.value)}
         rows={2}
-        className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-accent focus:outline-none"
+        className="input input-sm w-full"
       />
       <div className="mt-1.5 flex gap-2">
         <button
           disabled={busy || !note}
           onClick={resolve}
-          className="rounded-lg bg-verified px-3 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+          className="btn btn-verified btn-sm"
         >
           {busy ? "Guardando..." : "Marcar resuelto"}
         </button>

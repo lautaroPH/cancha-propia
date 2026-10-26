@@ -8,7 +8,6 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_jwt_secret: str = ""
     supabase_service_role_key: str = ""
-    security_pepper: str = "dev-only-change-me"
 
     aws_region: str = "us-east-1"
     aws_access_key_id: str = ""

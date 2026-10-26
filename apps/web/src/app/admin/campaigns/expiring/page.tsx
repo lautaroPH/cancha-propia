@@ -26,12 +26,9 @@ export default async function AdminExpiringCampaignsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-12">
+    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
       <div className="mb-2 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Campañas vencidas</h1>
-        <Link href="/admin" className="text-sm font-medium text-accent hover:underline">
-          ← Volver
-        </Link>
+        <h1 className="text-[2.5rem] sm:text-[3rem]">Campañas vencidas</h1>
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
         Campañas cuya fecha de competencia ya pasó. En <strong>gracia</strong>, el atleta todavía puede cerrarla o

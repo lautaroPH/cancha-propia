@@ -41,12 +41,12 @@ export function ReportButton({ slug }: { slug: string }) {
 
   return (
     <div className="max-w-sm rounded-lg border border-border bg-surface p-4">
-      <p className="text-sm font-medium text-foreground">Reportar este perfil</p>
+      <p className="text-sm font-semibold text-foreground">Reportar este perfil</p>
       {error && <p className="mt-2 text-sm text-danger">{error}</p>}
       <select
         value={reason}
         onChange={(e) => setReason(e.target.value)}
-        className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+        className="input input-sm mt-2"
       >
         {REPORT_REASONS.map((r) => (
           <option key={r} value={r}>
@@ -59,20 +59,20 @@ export function ReportButton({ slug }: { slug: string }) {
         value={detail}
         onChange={(e) => setDetail(e.target.value)}
         rows={2}
-        className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-accent focus:outline-none"
+        className="input input-sm mt-2"
       />
       <div className="mt-3 flex gap-2">
         <button
           disabled={busy}
           onClick={submit}
-          className="rounded-lg bg-danger px-3.5 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          className="btn btn-danger btn-sm"
         >
           {busy ? "Enviando..." : "Enviar reporte"}
         </button>
         <button
           disabled={busy}
           onClick={() => setOpen(false)}
-          className="rounded-lg px-3.5 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+          className="btn btn-sm text-muted-foreground hover:text-foreground"
         >
           Cancelar
         </button>

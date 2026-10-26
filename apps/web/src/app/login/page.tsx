@@ -9,6 +9,9 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/dashboard";
   const invalidLink = searchParams.get("error") === "invalid_link";
+  // Arriving from "Crear perfil" — same magic link either way (it creates the
+  // account on first use), but the copy should say what's actually happening.
+  const signingUp = next === "/apply";
 
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
@@ -37,49 +40,52 @@ function LoginForm() {
 
   if (status === "sent") {
     return (
-      <div className="mx-auto max-w-sm px-6 py-20 text-center">
-        <h1 className="text-xl font-bold text-foreground">Revisá tu email</h1>
-        <p className="mt-3 text-muted-foreground">
-          Te enviamos un enlace de acceso a <span className="font-medium text-foreground">{email}</span>.
-          Abrilo desde este mismo dispositivo para entrar.
+      <div className="mx-auto max-w-md px-4 py-16 sm:py-24">
+        <h1 className="text-[2.75rem]">Revisá tu email</h1>
+        <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
+          Te mandamos un enlace a <span className="font-semibold text-foreground">{email}</span>. Abrilo desde este
+          mismo celular o compu y entrás directo{signingUp ? " a armar tu figurita" : ""}.
         </p>
+        <button type="button" onClick={() => setStatus("idle")} className="mt-6 text-sm font-semibold text-accent underline">
+          Usar otro email
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-sm px-6 py-20">
-      <h1 className="text-xl font-bold text-foreground">Iniciar sesión</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Te mandamos un enlace mágico a tu email — sin contraseña.
+    <div className="mx-auto max-w-md px-4 py-16 sm:py-24">
+      {signingUp && <p className="mb-3 text-sm font-semibold text-muted-foreground">Paso 1 de 2</p>}
+      <h1 className="text-[2.75rem]">{signingUp ? "Creá tu cuenta" : "Entrá o creá tu cuenta"}</h1>
+      <p className="mt-3 text-lg leading-relaxed text-muted-foreground">
+        Solo tu email. Te mandamos un enlace para entrar, sin contraseña.
       </p>
 
       {invalidLink && (
-        <p className="mt-4 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">
-          Ese enlace ya no es válido. Pedí uno nuevo abajo.
+        <p className="mt-6 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">
+          Ese enlace ya venció o ya se usó. Pedí uno nuevo abajo.
         </p>
       )}
 
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+      <form onSubmit={handleSubmit} className="mt-8 space-y-4">
         <label className="block">
-          <span className="text-sm font-medium text-foreground/90">Email</span>
+          <span className="field-label">Email</span>
           <input
             type="email"
             required
+            autoComplete="email"
+            inputMode="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+            placeholder="vos@email.com"
+            className="input mt-1.5"
           />
         </label>
 
         {status === "error" && <p className="text-sm text-danger">{errorMessage}</p>}
 
-        <button
-          type="submit"
-          disabled={status === "sending"}
-          className="w-full rounded-lg bg-accent px-4 py-2.5 font-medium text-accent-foreground transition hover:opacity-90 disabled:opacity-50"
-        >
-          {status === "sending" ? "Enviando..." : "Enviar enlace de acceso"}
+        <button type="submit" disabled={status === "sending"} className="btn btn-primary w-full py-3 text-base">
+          {status === "sending" ? "Enviando..." : "Mandame el enlace"}
         </button>
       </form>
 

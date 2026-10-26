@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import CurrentUser, get_current_user
 from app.core.db import get_db
-from app.core.security import hash_national_id
 from app.models.models import Athlete, EvidenceFile
 from app.schemas.schemas import ApplicationCreate, ApplicationCreated
 from app.services.notifications import notify_application_received
@@ -30,24 +29,22 @@ async def _unique_slug(db: AsyncSession, full_name: str, exclude_id=None) -> str
         slug = f"{base}-{suffix}"
 
 
-def _apply_payload(athlete: Athlete, payload: ApplicationCreate, id_hash: str, is_minor: bool, user_email: str) -> None:
+def _apply_payload(athlete: Athlete, payload: ApplicationCreate, is_minor: bool, user_email: str) -> None:
     athlete.full_name = payload.full_name
     athlete.date_of_birth = payload.date_of_birth
     athlete.is_minor = is_minor
     athlete.province = payload.province
     athlete.city = payload.city
     athlete.sport = payload.sport
-    athlete.discipline = payload.discipline
-    athlete.category = payload.category
-    athlete.club = payload.club
-    athlete.federation = payload.federation
-    athlete.federation_license_number = payload.federation_license_number
     athlete.bio = payload.bio
-    athlete.story = payload.story
+    if payload.instagram_handle:
+        # They're signing up to be found — the handle they give here is shown
+        # on the profile by default; the dashboard can hide it later.
+        athlete.instagram_handle = payload.instagram_handle
+        athlete.instagram_public = True
     # Always the applicant's own login — a minor holds their own account too,
     # the guardian is consent-only, not a separate account (see plan discussion).
     athlete.contact_email = user_email.lower()
-    athlete.national_id_hash = id_hash
 
     if is_minor:
         athlete.guardian_email = str(payload.guardian_email).lower() if payload.guardian_email else None
@@ -82,33 +79,12 @@ async def submit_application(
                 detail=f"You can reapply after {available_at.isoformat()}.",
             )
 
-    # The uploaded keys must actually belong to this caller's own upload
-    # session (see POST /uploads/evidence-url) — otherwise anyone could point
-    # an application at someone else's already-uploaded document.
-    own_prefix = f"evidence/{user.auth_user_id}/"
-    if not payload.id_document_s3_key.startswith(own_prefix):
-        raise HTTPException(status_code=422, detail="Invalid id_document_s3_key")
-    if not payload.selfie_with_id_s3_key.startswith(own_prefix):
-        raise HTTPException(status_code=422, detail="Invalid selfie_with_id_s3_key")
-
-    id_hash = hash_national_id(payload.national_id)
-    dup_stmt = select(Athlete.id).where(Athlete.national_id_hash == id_hash)
-    if existing:
-        dup_stmt = dup_stmt.where(Athlete.id != existing.id)
-    duplicate = (await db.execute(dup_stmt)).scalar_one_or_none()
-    if duplicate:
-        # Deliberately not "already exists" — avoid confirming/denying identity to the caller.
-        raise HTTPException(
-            status_code=409,
-            detail="We couldn't process this application. If you believe this is an error, contact support.",
-        )
-
     age_years = (date.today() - payload.date_of_birth).days / 365.25
     is_minor = age_years < 18
 
     if existing:
         athlete = existing
-        _apply_payload(athlete, payload, id_hash, is_minor, user.email)
+        _apply_payload(athlete, payload, is_minor, user.email)
         athlete.status = "pending"
         athlete.rejection_reason = None
         athlete.rejected_at = None
@@ -116,14 +92,10 @@ async def submit_application(
         athlete.info_requested_at = None
         athlete.slug = await _unique_slug(db, payload.full_name, exclude_id=athlete.id)
 
-        # Resubmitting replaces the evidence links and identity documents
-        # rather than appending — stale evidence from the rejected attempt
-        # shouldn't linger.
+        # Resubmitting replaces the evidence links rather than appending —
+        # stale links from the rejected attempt shouldn't linger.
         await db.execute(
-            delete(EvidenceFile).where(
-                EvidenceFile.athlete_id == athlete.id,
-                EvidenceFile.kind.in_(["federation_link", "id_document", "selfie_with_id"]),
-            )
+            delete(EvidenceFile).where(EvidenceFile.athlete_id == athlete.id, EvidenceFile.kind == "federation_link")
         )
     else:
         athlete = Athlete(
@@ -131,7 +103,7 @@ async def submit_application(
             status="pending",
             auth_user_id=user.auth_user_id,
         )
-        _apply_payload(athlete, payload, id_hash, is_minor, user.email)
+        _apply_payload(athlete, payload, is_minor, user.email)
         db.add(athlete)
 
     await db.flush()
@@ -141,23 +113,6 @@ async def submit_application(
         # uploaded object — evidence uploads (kind=id_document/photo/...) use it for
         # an actual S3 key instead. Same column, two meanings by kind.
         db.add(EvidenceFile(athlete_id=athlete.id, kind="federation_link", s3_key=link))
-
-    db.add(
-        EvidenceFile(
-            athlete_id=athlete.id,
-            kind="id_document",
-            s3_key=payload.id_document_s3_key,
-            original_filename=payload.id_document_filename,
-        )
-    )
-    db.add(
-        EvidenceFile(
-            athlete_id=athlete.id,
-            kind="selfie_with_id",
-            s3_key=payload.selfie_with_id_s3_key,
-            original_filename=payload.selfie_with_id_filename,
-        )
-    )
 
     await db.commit()
     await db.refresh(athlete)

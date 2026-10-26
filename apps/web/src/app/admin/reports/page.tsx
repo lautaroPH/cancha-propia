@@ -25,12 +25,9 @@ export default async function AdminReportsPage(props: PageProps<"/admin/reports"
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-12">
+    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Reportes</h1>
-        <Link href="/admin" className="text-sm font-medium text-accent hover:underline">
-          ← Volver
-        </Link>
+        <h1 className="text-[2.5rem] sm:text-[3rem]">Reportes</h1>
       </div>
 
       <div className="mb-6 flex gap-2">

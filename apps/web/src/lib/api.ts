@@ -92,6 +92,7 @@ export type AthleteProfile = {
   career_verified: boolean;
   competition_verified: boolean;
   instagram_handle: string | null;
+  instagram_posts: string[];
   whatsapp_number: string | null;
   alias: string | null;
   cbu: string | null;
@@ -103,23 +104,13 @@ export type AthleteProfile = {
 export type ApplicationPayload = {
   full_name: string;
   date_of_birth: string;
-  national_id: string;
+  sport: string;
   province?: string;
   city?: string;
-  sport: string;
-  discipline?: string;
-  category?: string;
-  club?: string;
-  federation?: string;
-  federation_license_number?: string;
+  instagram_handle?: string;
   bio?: string;
-  story?: string;
+  // Optional — the reviewer needs an Instagram handle or at least one link.
   evidence_links: string[];
-  // Uploaded via getEvidenceUploadUrl + a direct PUT before submitting.
-  id_document_s3_key: string;
-  id_document_filename?: string;
-  selfie_with_id_s3_key: string;
-  selfie_with_id_filename?: string;
   // Minors hold their own account (contact_email is always the caller's own
   // login) — the guardian is consent-only, captured here, not a separate account.
   guardian_email?: string;
@@ -185,6 +176,14 @@ export type AuditLogEntry = {
 };
 
 export type AthleteSelfUpdatePayload = Partial<{
+  sport: string;
+  discipline: string | null;
+  category: string | null;
+  province: string | null;
+  city: string | null;
+  club: string | null;
+  federation: string | null;
+  instagram_posts: string[];
   bio: string;
   story: string;
   achievements: Achievement[];
@@ -292,7 +291,7 @@ export function submitApplication(token: string, payload: ApplicationPayload) {
   });
 }
 
-// --- Evidence document upload (ID/DNI, etc.) — private, encrypted, admin-only reads ---
+// --- Direct-to-S3 uploads ---
 
 type PresignedPost = { url: string; fields: Record<string, string>; s3_key: string };
 
@@ -308,19 +307,6 @@ async function postFileToS3(presigned: PresignedPost, file: File, errorMessage: 
     if (res.status === 400) throw new Error(`${errorMessage} (¿el archivo es demasiado grande?)`);
     throw new Error(errorMessage);
   }
-}
-
-export function getEvidenceUploadUrl(token: string, filename: string, contentType: string) {
-  return authedFetch<PresignedPost>(token, "/uploads/evidence-url", {
-    method: "POST",
-    body: JSON.stringify({ filename, content_type: contentType }),
-  });
-}
-
-export async function uploadEvidenceFile(token: string, file: File): Promise<{ s3_key: string; filename: string }> {
-  const presigned = await getEvidenceUploadUrl(token, file.name, file.type);
-  await postFileToS3(presigned, file, "No se pudo subir el archivo");
-  return { s3_key: presigned.s3_key, filename: file.name };
 }
 
 // --- Profile photo upload — public, shown on the athlete's profile ---

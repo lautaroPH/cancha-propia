@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { StatusPill, statusLabel } from "@/components/admin-nav";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { adminListAthletes, ApiError } from "@/lib/api";
@@ -26,8 +27,8 @@ export default async function AdminAllAthletesPage(props: PageProps<"/admin/athl
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-12">
-      <h1 className="text-2xl font-bold text-foreground">Todos los atletas</h1>
+    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
+      <h1 className="text-[2.5rem] sm:text-[3rem]">Todos los atletas</h1>
 
       <div className="mt-4 flex flex-wrap gap-2">
         <Link
@@ -46,7 +47,7 @@ export default async function AdminAllAthletesPage(props: PageProps<"/admin/athl
               statusFilter === s ? "bg-accent text-accent-foreground" : "bg-surface-muted text-muted-foreground"
             }`}
           >
-            {s}
+            {statusLabel(s)}
           </Link>
         ))}
       </div>
@@ -68,9 +69,7 @@ export default async function AdminAllAthletesPage(props: PageProps<"/admin/athl
                 {a.province ? ` · ${a.province}` : ""}
               </p>
             </div>
-            <span className="inline-flex items-center rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-              {a.status}
-            </span>
+            <StatusPill status={a.status} />
           </Link>
         ))}
       </div>

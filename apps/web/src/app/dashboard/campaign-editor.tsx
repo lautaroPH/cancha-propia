@@ -46,17 +46,20 @@ export function CampaignEditor({
   }
 
   return (
-    <section className="mt-10 space-y-6 border-t border-border pt-6">
-      <h2 className="text-sm font-semibold text-muted-foreground uppercase">Campaña</h2>
+    <section className="space-y-5">
+      <div>
+        <h2 className="group-title">Campaña</h2>
+        <p className="field-hint">Una meta concreta para tu próxima competencia: viaje, inscripción, equipo. Se publica cuando nuestro equipo la aprueba.</p>
+      </div>
       {error && <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
       {activeCampaign ? (
-        <div className="rounded-lg border border-accent-soft bg-accent-soft/40 p-4">
-          <p className="font-medium text-foreground">{activeCampaign.title}</p>
+        <div className="rounded-xl bg-sol-soft p-5">
+          <p className="display text-[1.5rem]">{activeCampaign.title}</p>
           <p className="text-sm text-muted-foreground">Meta: {money(activeCampaign.goal_amount_ars)}</p>
 
           {activeCampaign.status === "grace" && (
-            <div className="mt-3 rounded-lg border border-accent bg-background p-3">
+            <div className="mt-3 rounded-lg bg-surface p-3">
               <p className="text-sm text-foreground">
                 La fecha de tu competencia ya pasó. Cerrá la campaña o actualizá la fecha para seguir mostrándola.
               </p>
@@ -82,10 +85,10 @@ export function CampaignEditor({
       ) : pausedCampaign ? (
         <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
           <p className="font-medium text-foreground">{pausedCampaign.title}</p>
-          <p className="mt-1">Un administrador pausó esta campaña temporalmente. Contactanos si tenés dudas.</p>
+          <p className="mt-1">Nuestro equipo pausó esta campaña por ahora. Escribinos si tenés dudas.</p>
         </div>
       ) : expiredCampaign ? (
-        <div className="rounded-lg border border-danger bg-danger-soft/40 p-4">
+        <div className="rounded-xl bg-danger-soft p-5">
           <p className="font-medium text-foreground">{expiredCampaign.title}</p>
           <p className="mt-1 text-sm text-foreground">
             Esta campaña venció y ya no se muestra en tu perfil público. Actualizá la fecha si la competencia se
@@ -102,7 +105,7 @@ export function CampaignEditor({
         </div>
       ) : draftCampaigns.length > 0 ? (
         <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-          Tenés {draftCampaigns.length} campaña(s) esperando aprobación del administrador:{" "}
+          {draftCampaigns.length === 1 ? "Tu campaña está esperando aprobación:" : `Tenés ${draftCampaigns.length} campañas esperando aprobación:`}{" "}
           {draftCampaigns.map((c) => c.title).join(", ")}
         </div>
       ) : (
@@ -131,12 +134,12 @@ function RenewForm({
         type="date"
         value={eventDate}
         onChange={(e) => setEventDate(e.target.value)}
-        className="rounded-lg border border-border bg-surface px-2 py-1 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+        className="input input-sm w-auto"
       />
       <button
         disabled={busy || !eventDate}
         onClick={() => run(() => renewMyCampaign(accessToken, campaignId, eventDate))}
-        className="rounded-lg bg-accent px-3 py-1 text-sm font-medium text-accent-foreground hover:opacity-90 disabled:opacity-50"
+        className="btn btn-primary btn-sm"
       >
         Actualizar fecha
       </button>
@@ -160,18 +163,18 @@ function RaisedForm({
   const [raised, setRaised] = useState(String(current ?? ""));
 
   return (
-    <div className="mt-3 flex items-center gap-2">
-      <label className="text-sm text-foreground/90">Recaudado hasta ahora (autoreportado):</label>
+    <div className="mt-4 flex flex-wrap items-center gap-2">
+      <label className="w-full text-sm font-semibold sm:w-auto">Recaudado hasta ahora (lo informás vos):</label>
       <input
         type="number"
         value={raised}
         onChange={(e) => setRaised(e.target.value)}
-        className="w-32 rounded-lg border border-border bg-surface px-2 py-1 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+        className="input input-sm w-32"
       />
       <button
         disabled={busy}
         onClick={() => run(() => updateMyCampaignRaised(accessToken, campaignId, Number(raised) || 0))}
-        className="rounded-lg bg-accent px-3 py-1 text-sm font-medium text-accent-foreground hover:opacity-90 disabled:opacity-50"
+        className="btn btn-primary btn-sm"
       >
         Actualizar
       </button>
@@ -200,58 +203,61 @@ function NewCampaignForm({
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-border p-4">
-      <p className="text-sm text-muted-foreground">
-        Creá una nueva campaña — queda pendiente hasta que un administrador la apruebe.
-      </p>
+    <div className="space-y-3 rounded-xl border border-border p-5">
       <input
-        placeholder="Título (ej: Campeonato Panamericano 2027 — México)"
+        placeholder="Título (ej: Panamericano 2027 en México)"
+        aria-label="Título de la campaña"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className="w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+        className="input input-sm w-full"
       />
       <textarea
-        placeholder="Descripción"
+        placeholder="Contá para qué es y por qué importa"
+        aria-label="Descripción"
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         rows={2}
-        className="w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+        className="input input-sm w-full"
       />
-      <input
-        type="date"
-        value={eventDate}
-        onChange={(e) => setEventDate(e.target.value)}
-        className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
-      />
+      <label className="block">
+        <span className="field-label">Fecha de la competencia</span>
+        <input
+          type="date"
+          value={eventDate}
+          onChange={(e) => setEventDate(e.target.value)}
+          className="input input-sm mt-1.5 w-auto"
+        />
+      </label>
 
       <div className="space-y-2">
+        <p className="field-label">En qué se usa la plata</p>
         {breakdown.map((b, i) => (
           <div key={i} className="flex gap-2">
             <input
               placeholder="Concepto (ej: Viaje)"
               value={b.label}
               onChange={(e) => updateItem(i, { label: e.target.value })}
-              className="flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              className="input input-sm flex-1"
             />
             <input
               type="number"
               placeholder="Monto"
               value={b.amount_ars || ""}
               onChange={(e) => updateItem(i, { amount_ars: Number(e.target.value) || 0 })}
-              className="w-32 rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground focus:border-accent focus:ring-1 focus:ring-accent focus:outline-none"
+              className="input input-sm w-32"
             />
           </div>
         ))}
         <button
           type="button"
           onClick={() => setBreakdown((prev) => [...prev, { label: "", amount_ars: 0 }])}
-          className="text-sm font-medium text-accent hover:underline"
+          className="text-sm font-semibold text-accent underline hover:no-underline"
         >
           + Agregar concepto
         </button>
       </div>
 
-      <p className="text-sm font-medium text-foreground">Meta total: {money(goal)}</p>
+      <p className="text-sm">Meta total: <span className="display text-[1.5rem]">{money(goal)}</span></p>
 
       <button
         disabled={busy || !title || goal <= 0}
@@ -266,7 +272,7 @@ function NewCampaignForm({
             })
           )
         }
-        className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:opacity-90 disabled:opacity-50"
+        className="btn btn-primary"
       >
         Crear campaña
       </button>
