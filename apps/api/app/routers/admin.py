@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -18,6 +18,8 @@ from app.schemas.schemas import (
     CampaignPauseRequest,
     EvidenceDownloadUrl,
     EvidenceFileOut,
+    InviteCreate,
+    InviteLink,
     RejectRequest,
     ReportOut,
     ReportResolveRequest,
@@ -35,7 +37,9 @@ from app.services.notifications import (
     notify_rejected,
     notify_suspended,
 )
+from app.services.invites import new_invite_token
 from app.services.reapplication import reapply_available_at
+from app.routers.applications import _unique_slug
 from app.services.s3 import presigned_read_url, public_url
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(get_current_admin)])
@@ -129,6 +133,71 @@ async def _commit_and_reload_detail(db: AsyncSession, athlete: Athlete) -> Athle
 
 def _append_note(athlete: Athlete, note: str) -> None:
     athlete.admin_notes = f"{athlete.admin_notes}\n{note}" if athlete.admin_notes else note
+
+
+@router.post("/invites", response_model=InviteLink, status_code=201)
+async def create_invite(
+    payload: InviteCreate,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    """A private draft of a real athlete's profile, built from their public
+    footprint, that they claim through the returned link. Never listed
+    publicly — status "invited" — until they claim it and it passes review."""
+    token, token_hash = new_invite_token()
+    athlete = Athlete(
+        slug=await _unique_slug(db, payload.full_name),
+        status="invited",
+        full_name=payload.full_name,
+        sport=payload.sport,
+        discipline=payload.discipline,
+        province=payload.province,
+        city=payload.city,
+        club=payload.club,
+        bio=payload.bio,
+        instagram_handle=payload.instagram_handle,
+        instagram_public=bool(payload.instagram_handle),
+        instagram_posts=payload.instagram_posts,
+        invite_token_hash=token_hash,
+        invite_created_at=datetime.now(timezone.utc),
+    )
+    db.add(athlete)
+    await db.flush()
+    await _log(db, admin, athlete.id, "invite_created")
+    await db.commit()
+    return InviteLink(athlete_id=athlete.id, slug=athlete.slug, token=token)
+
+
+async def _load_invited_or_404(db: AsyncSession, athlete_id) -> Athlete:
+    athlete = (await db.execute(select(Athlete).where(Athlete.id == athlete_id))).scalar_one_or_none()
+    if athlete is None or athlete.status != "invited":
+        raise HTTPException(status_code=404, detail="Invite not found (or already claimed)")
+    return athlete
+
+
+@router.post("/invites/{athlete_id}/link", response_model=InviteLink)
+async def regenerate_invite_link(
+    athlete_id,
+    db: AsyncSession = Depends(get_db),
+    admin: AdminUser = Depends(get_current_admin),
+):
+    # Only the hash is stored, so "show me the link again" means a new link —
+    # which also kills any copy of the old one.
+    athlete = await _load_invited_or_404(db, athlete_id)
+    token, athlete.invite_token_hash = new_invite_token()
+    athlete.invite_created_at = datetime.now(timezone.utc)
+    await _log(db, admin, athlete.id, "invite_link_regenerated")
+    await db.commit()
+    return InviteLink(athlete_id=athlete.id, slug=athlete.slug, token=token)
+
+
+@router.delete("/invites/{athlete_id}", status_code=204)
+async def delete_invite(athlete_id, db: AsyncSession = Depends(get_db)):
+    athlete = await _load_invited_or_404(db, athlete_id)
+    await db.execute(AdminAuditLog.__table__.delete().where(AdminAuditLog.athlete_id == athlete.id))
+    await db.delete(athlete)
+    await db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/applications", response_model=list[AdminAthleteListItem])

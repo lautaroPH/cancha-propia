@@ -33,10 +33,10 @@ export default async function AdminAthleteDetailPage(props: PageProps<"/admin/at
   }
   const auditLog = await adminAuditLog(session.access_token, id);
 
-  const birthDate = new Date(`${athlete.date_of_birth}T12:00:00`);
-  const age = ageInYears(birthDate);
+  // Null only on an unclaimed invite — the athlete fills it in when claiming.
+  const birthDate = athlete.date_of_birth ? new Date(`${athlete.date_of_birth}T12:00:00`) : null;
   const facts: [string, string | null][] = [
-    ["Edad", `${age} años (${birthDate.toLocaleDateString("es-AR")})`],
+    ["Edad", birthDate ? `${ageInYears(birthDate)} años (${birthDate.toLocaleDateString("es-AR")})` : null],
     ["Email", athlete.contact_email],
     ["Ubicación", placeLabel(athlete)],
     ["Disciplina", athlete.discipline],

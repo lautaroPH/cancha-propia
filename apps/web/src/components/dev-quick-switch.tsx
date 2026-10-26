@@ -44,7 +44,7 @@ function persistAccounts(list: string[]) {
 // Local dev only — lets you switch between test accounts instantly, no email
 // involved. Only renders in `next dev` (NODE_ENV is inlined at build time,
 // so this whole component tree is stripped from a production build).
-export function DevQuickSwitch() {
+export function DevQuickSwitch({ next = "/dashboard" }: { next?: string }) {
   const router = useRouter();
   const rawAccounts = useSyncExternalStore(subscribeToAccounts, getAccountsSnapshot, getAccountsServerSnapshot);
   const accounts = useMemo(() => {
@@ -74,11 +74,14 @@ export function DevQuickSwitch() {
     try {
       const { token } = await devIssueOtp(email);
       const supabase = createClient();
-      const { error: verifyError } = await supabase.auth.verifyOtp({ email, token, type: "magiclink" });
+      // "email" accepts both a magic-link OTP (existing user) and a signup OTP
+      // (first login) — "magiclink" rejected the latter, so a brand-new test
+      // account always failed on its first click.
+      const { error: verifyError } = await supabase.auth.verifyOtp({ email, token, type: "email" });
       if (verifyError) throw verifyError;
 
       if (!accounts.includes(email)) persistAccounts([email, ...accounts]);
-      router.push("/dashboard");
+      router.push(next);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cambiar de cuenta");

@@ -7,7 +7,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
 
-AthleteStatus = ENUM("pending", "active", "rejected", "suspended", name="athlete_status", create_type=False)
+AthleteStatus = ENUM(
+    "invited", "pending", "active", "rejected", "suspended", name="athlete_status", create_type=False
+)
 CampaignStatus = ENUM(
     "draft", "active", "grace", "closed", "expired", "paused", name="campaign_status", create_type=False
 )
@@ -38,7 +40,8 @@ class Athlete(Base):
     status: Mapped[str] = mapped_column(AthleteStatus, default="pending")
 
     full_name: Mapped[str] = mapped_column(Text)
-    date_of_birth: Mapped[date] = mapped_column(Date)
+    # Null only on an admin-prepared invite the athlete hasn't claimed yet.
+    date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_minor: Mapped[bool] = mapped_column(default=False)
 
     province: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -90,7 +93,12 @@ class Athlete(Base):
     raffle_public: Mapped[bool] = mapped_column(default=False)
 
     national_id_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
-    contact_email: Mapped[str] = mapped_column(Text)
+    contact_email: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Private claim link for an admin-prepared draft (status "invited") —
+    # SHA-256 of the token only; see migration 0013.
+    invite_token_hash: Mapped[str | None] = mapped_column(Text, unique=True, nullable=True)
+    invite_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

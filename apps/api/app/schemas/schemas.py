@@ -94,6 +94,36 @@ class ApplicationCreate(BaseModel):
         return self
 
 
+class InviteCreate(BaseModel):
+    """What an admin knows from an athlete's public footprint before they've
+    signed up — enough to show them a real draft of their own profile."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: str = Field(min_length=1)
+    sport: str = Field(min_length=1)
+    discipline: str | None = None
+    province: str | None = None
+    city: str | None = None
+    club: str | None = None
+    instagram_handle: str | None = None
+    bio: str | None = None
+    instagram_posts: list[str] = Field(default_factory=list, max_length=MAX_INSTAGRAM_POSTS)
+
+    _normalize_handle = field_validator("instagram_handle")(normalize_instagram_handle)
+
+    @field_validator("instagram_posts")
+    @classmethod
+    def _normalize_posts(cls, posts: list[str]) -> list[str]:
+        return list(dict.fromkeys(normalize_instagram_post(p) for p in posts if p.strip()))
+
+
+class InviteLink(BaseModel):
+    athlete_id: uuid.UUID
+    slug: str
+    token: str  # shown once; only its hash is stored
+
+
 class ApplicationCreated(BaseModel):
     id: uuid.UUID
     slug: str
@@ -181,10 +211,10 @@ class AthleteAdminView(AthleteProfile):
 
     id: uuid.UUID
     status: str
-    date_of_birth: date
+    date_of_birth: date | None  # null only on an unclaimed invite
     is_minor: bool
     federation_license_number: str | None
-    contact_email: str
+    contact_email: str | None  # null only on an unclaimed invite
     guardian_email: str | None
     guardian_consent_at: datetime | None
     rejection_reason: str | None

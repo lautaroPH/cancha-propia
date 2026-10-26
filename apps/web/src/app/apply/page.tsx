@@ -68,7 +68,7 @@ export default function ApplyPage() {
           if (athlete.status === "rejected") setReapplyAvailableAt(athlete.reapply_available_at);
           setPrevious(athlete);
           setFullName(athlete.full_name);
-          setDateOfBirth(athlete.date_of_birth);
+          setDateOfBirth(athlete.date_of_birth ?? "");
           setSport(athlete.sport);
           setProvince(athlete.province ?? "");
           setCity(athlete.city ?? "");

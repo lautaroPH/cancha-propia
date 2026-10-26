@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { adminListAthletes, ApiError } from "@/lib/api";
 import { AdminAccessDenied } from "@/components/admin-access-denied";
 
-const STATUSES = ["pending", "active", "rejected", "suspended"] as const;
+const STATUSES = ["invited", "pending", "active", "rejected", "suspended"] as const;
 
 export default async function AdminAllAthletesPage(props: PageProps<"/admin/athletes">) {
   const { status } = await props.searchParams;

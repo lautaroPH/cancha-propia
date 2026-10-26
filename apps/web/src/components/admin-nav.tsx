@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const LINKS = [
   { href: "/admin", label: "Postulaciones" },
+  { href: "/admin/invites", label: "Invitaciones" },
   { href: "/admin/athletes", label: "Atletas" },
   { href: "/admin/reports", label: "Reportes" },
   { href: "/admin/campaigns/expiring", label: "Campañas vencidas" },
@@ -42,6 +43,7 @@ export function AdminNav() {
 }
 
 const STATUS: Record<string, { label: string; className: string }> = {
+  invited: { label: "Invitación", className: "bg-celeste-soft text-foreground" },
   pending: { label: "En revisión", className: "bg-sol-soft text-foreground" },
   active: { label: "Publicado", className: "bg-verified-soft text-verified" },
   rejected: { label: "Rechazado", className: "bg-danger-soft text-danger" },

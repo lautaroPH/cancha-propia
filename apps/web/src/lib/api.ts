@@ -121,7 +121,7 @@ export type AdminAthleteListItem = {
   id: string;
   slug: string;
   full_name: string;
-  status: "pending" | "active" | "rejected" | "suspended";
+  status: "invited" | "pending" | "active" | "rejected" | "suspended";
   sport: string;
   province: string | null;
   identity_verified: boolean;
@@ -141,10 +141,10 @@ export type EvidenceFileEntry = {
 export type AthleteDetail = AthleteProfile & {
   id: string;
   status: string;
-  date_of_birth: string;
+  date_of_birth: string | null; // null only on an unclaimed invite
   is_minor: boolean;
   federation_license_number: string | null;
-  contact_email: string;
+  contact_email: string | null; // null only on an unclaimed invite
   guardian_email: string | null;
   guardian_consent_at: string | null;
   rejection_reason: string | null;
@@ -337,6 +337,46 @@ export function adminWhoAmI(token: string) {
 
 export function adminListApplications(token: string) {
   return authedFetch<AdminAthleteListItem[]>(token, "/admin/applications");
+}
+
+// --- Invites: admin-prepared drafts a real athlete claims via a private link ---
+
+export type InviteCreatePayload = {
+  full_name: string;
+  sport: string;
+  discipline?: string;
+  province?: string;
+  city?: string;
+  club?: string;
+  instagram_handle?: string;
+  bio?: string;
+  instagram_posts: string[];
+};
+
+export type InviteLink = { athlete_id: string; slug: string; token: string };
+
+export function adminCreateInvite(token: string, payload: InviteCreatePayload) {
+  return authedFetch<InviteLink>(token, "/admin/invites", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function adminRegenerateInviteLink(token: string, athleteId: string) {
+  return authedFetch<InviteLink>(token, `/admin/invites/${athleteId}/link`, { method: "POST" });
+}
+
+export function adminDeleteInvite(token: string, athleteId: string) {
+  return authedFetch<void>(token, `/admin/invites/${athleteId}`, { method: "DELETE" });
+}
+
+export function getInvite(inviteToken: string) {
+  return apiFetch<AthleteProfile>(`/invites/${encodeURIComponent(inviteToken)}`, { cache: "no-store" });
+}
+
+export function claimInvite(token: string, inviteToken: string, payload: ApplicationPayload) {
+  return authedFetch<{ id: string; slug: string; status: string }>(
+    token,
+    `/invites/${encodeURIComponent(inviteToken)}/claim`,
+    { method: "POST", body: JSON.stringify(payload) }
+  );
 }
 
 export function adminListAthletes(token: string, status?: string) {
