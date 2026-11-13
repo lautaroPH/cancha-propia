@@ -1,8 +1,7 @@
 # Codeportistas
 
-Discovery and trust platform for Argentine high-performance athletes. See the
-[product plan](https://claude.ai/code/artifact/9924618e-4080-42f6-946a-68f825e99634) for the
-full MVP scope, verification model, and roadmap.
+Discovery and trust platform for Argentine high-performance athletes: verified public profiles,
+an application and verification flow, and support campaigns.
 
 ## Stack
 

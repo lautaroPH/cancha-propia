@@ -21,3 +21,7 @@ Thumbs.db
 
 # Local database backups (contain personal data)
 backups/
+
+# Local tooling (agents, design notes)
+.claude/
+.impeccable/
